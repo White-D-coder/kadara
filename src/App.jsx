@@ -2,13 +2,11 @@ import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { GraphicsManager } from './engine/graphics/GraphicsManager'
 import { KadaraPostProcessing } from './engine/graphics/PostProcessing'
-import { Archipelago } from './engine/world/Archipelago'
-import { Ocean } from './engine/world/Ocean'
-import { Atmosphere } from './engine/world/Atmosphere'
 import { InputManager } from './engine/systems/InputManager'
 import { CameraController } from './hooks/useCameraTransition.jsx'
 import { AdaptiveQualityManager } from './hooks/useAdaptiveQuality'
 import { useGameStore } from './store/useGameStore'
+import { ArchipelagoGenerator } from './engine/world/features/ArchipelagoGenerator'
 import './index.css'
 
 function UIOverlay() {
@@ -62,10 +60,8 @@ function Scene() {
       <InputManager />
       <CameraController />
 
-      {/* Environment */}
-      <Atmosphere />
-      <Ocean />
-      <Archipelago />
+      {/* Cinematic Phase 7 Core Engine */}
+      <ArchipelagoGenerator />
       
       {/* Visuals */}
       <KadaraPostProcessing />
@@ -76,13 +72,13 @@ function Scene() {
 export default function App() {
   return (
     <div className="app-container">
-      <Canvas shadows camera={{ fov: 60 }}>
+      <Canvas shadows camera={{ fov: 60, near: 0.5, far: 80000 }}>
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
       </Canvas>
       <UIOverlay />
-      <div className="version-tag">Kadara Phase v0.2.0 (High Fidelity)</div>
+      <div className="version-tag">Phase 7: Cinematic Open World</div>
     </div>
   )
 }
