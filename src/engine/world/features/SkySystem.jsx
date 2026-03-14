@@ -18,7 +18,6 @@ export function SkySystem() {
   const atmosphereParams = useMemo(() => {
     const t = sunTime / 24.0
     const angle = t * Math.PI * 2 - (Math.PI / 2)
-    const sinA = Math.sin(angle)
     
     // Dawn/Dusk check
     const isSunset = sunTime > 16 && sunTime < 20
@@ -42,30 +41,23 @@ export function SkySystem() {
     const time = state.clock.elapsedTime
     
     // 1. Dynamic Wind Logic
-    // Wind vector rotates slowly and oscillates in strength
     const windAngle = time * 0.05
     const windStrength = 0.5 + Math.sin(time * 0.1) * 0.4
     windDir.current.set(Math.cos(windAngle), 0, Math.sin(windAngle)).multiplyScalar(windStrength)
 
     // 2. Animate clouds with Wind
     if (cloudGroupRef.current) {
-        // Horizontal drift based on wind
         cloudGroupRef.current.children.forEach((cloud, i) => {
-            // Each cloud has a slight offset speed
             const speedFact = 1.0 + (i * 0.1)
             cloud.position.x += windDir.current.x * speedFact * 0.2
             cloud.position.z += windDir.current.z * speedFact * 0.2
             
-            // Wrap clouds around the world bounds (Giga-scale wrap)
             const bound = 8000
             if (cloud.position.x > bound) cloud.position.x = -bound
             if (cloud.position.x < -bound) cloud.position.x = bound
             if (cloud.position.z > bound) cloud.position.z = -bound
             if (cloud.position.z < -bound) cloud.position.z = bound
 
-            // 3. Change shape/size (Condition) based on time/wind
-            // We use the 'volume' and 'scale' props indirectly via ref if possible, 
-            // but for now, we'll oscillate local scale
             const pulse = 1.0 + Math.sin(time * 0.2 + i) * 0.1
             cloud.scale.set(pulse, pulse, pulse)
         })
@@ -80,16 +72,13 @@ export function SkySystem() {
     
     if (sy > 0) {
       if (normalizedY < 0.25) {
-        // Morning/Evening Golden Hour
         dirLightRef.current.color.set('#ff9d4d')
         dirLightRef.current.intensity = 1.2
       } else {
-        // High Noon
         dirLightRef.current.color.set('#fff4e6')
         dirLightRef.current.intensity = 1.8
       }
     } else {
-        // Moonlight
         dirLightRef.current.color.set('#6a8aff')
         dirLightRef.current.intensity = 0.3
     }
@@ -97,13 +86,10 @@ export function SkySystem() {
 
   return (
     <group name="sky-atmosphere">
-      {/* Dynamic Fog with expanded Far Clip */}
       <fog attach="fog" args={[atmosphereParams.fogColor, 2000, 45000]} />
 
-      {/* Wind-Driven Procedural Clouds */}
       <group ref={cloudGroupRef}>
         <Clouds material={THREE.MeshBasicMaterial} limit={400}>
-            {/* Multi-layered Cloud System */}
             {[...Array(25)].map((_, i) => (
                 <Cloud 
                     key={i}
@@ -124,7 +110,6 @@ export function SkySystem() {
         </Clouds>
       </group>
 
-      {/* Atmospheric Scattering */}
       <Sky 
         distance={450000} 
         sunPosition={atmosphereParams.sunPos} 
@@ -135,7 +120,6 @@ export function SkySystem() {
       />
 
       <Environment preset={isNight ? "night" : "sunset"} background={false} />
-
       <ambientLight intensity={isNight ? 0.1 : 0.4} color={isNight ? "#203060" : "#fff4e6"} />
       
       <directionalLight
