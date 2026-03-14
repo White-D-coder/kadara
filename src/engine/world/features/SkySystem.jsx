@@ -1,109 +1,142 @@
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Sky, Cloud, Clouds, Environment, SoftShadows } from '@react-three/drei'
+import { Sky, Cloud, Clouds, Environment } from '@react-three/drei'
 import { useGameStore, GPU_TIERS } from '../../../store/useGameStore'
 import * as THREE from 'three'
 
 export function SkySystem() {
-  const sunTime = useGameStore(state => state.sunTime) // 0 - 24
+  const sunTime = useGameStore(state => state.sunTime)
   const gpuTier = useGameStore(state => state.gpuTier)
   const dirLightRef = useRef()
   const cloudGroupRef = useRef()
+  const windDir = useRef(new THREE.Vector3(1, 0, 0.5).normalize())
 
   const isHighTier = gpuTier === GPU_TIERS.HIGH
-  const isNight = sunTime > 18 || sunTime < 6
+  const isNight = sunTime > 19 || sunTime < 5
+  
+  // Dynamic Atmosphere Values based on sunTime
+  const atmosphereParams = useMemo(() => {
+    const t = sunTime / 24.0
+    const angle = t * Math.PI * 2 - (Math.PI / 2)
+    const sinA = Math.sin(angle)
+    
+    // Dawn/Dusk check
+    const isSunset = sunTime > 16 && sunTime < 20
+    const isSunrise = sunTime > 4 && sunTime < 8
+    
+    let fogColor = '#1a3a6a' // Day blue
+    if (isNight) fogColor = '#05070a'
+    if (isSunset) fogColor = '#6a2a1a' // Deep orange/red
+    if (isSunrise) fogColor = '#4a5a7a'
+    
+    return {
+      sunPos: [Math.cos(angle) * 800, Math.sin(angle) * 800, 100],
+      fogColor,
+      rayleigh: isSunset || isSunrise ? 10.0 : 4.0,
+      turbidity: isNight ? 0.1 : 0.05,
+      mieCoefficient: 0.005
+    }
+  }, [sunTime, isNight])
 
   useFrame((state) => {
-    // 1. Move Clouds slowly for sweeping shadows
+    const time = state.clock.elapsedTime
+    
+    // 1. Dynamic Wind Logic
+    // Wind vector rotates slowly and oscillates in strength
+    const windAngle = time * 0.05
+    const windStrength = 0.5 + Math.sin(time * 0.1) * 0.4
+    windDir.current.set(Math.cos(windAngle), 0, Math.sin(windAngle)).multiplyScalar(windStrength)
+
+    // 2. Animate clouds with Wind
     if (cloudGroupRef.current) {
-      cloudGroupRef.current.position.x = Math.sin(state.clock.elapsedTime * 0.05) * 200
-      cloudGroupRef.current.position.z = Math.cos(state.clock.elapsedTime * 0.05) * 200
+        // Horizontal drift based on wind
+        cloudGroupRef.current.children.forEach((cloud, i) => {
+            // Each cloud has a slight offset speed
+            const speedFact = 1.0 + (i * 0.1)
+            cloud.position.x += windDir.current.x * speedFact * 0.2
+            cloud.position.z += windDir.current.z * speedFact * 0.2
+            
+            // Wrap clouds around the world bounds (Giga-scale wrap)
+            const bound = 8000
+            if (cloud.position.x > bound) cloud.position.x = -bound
+            if (cloud.position.x < -bound) cloud.position.x = bound
+            if (cloud.position.z > bound) cloud.position.z = -bound
+            if (cloud.position.z < -bound) cloud.position.z = bound
+
+            // 3. Change shape/size (Condition) based on time/wind
+            // We use the 'volume' and 'scale' props indirectly via ref if possible, 
+            // but for now, we'll oscillate local scale
+            const pulse = 1.0 + Math.sin(time * 0.2 + i) * 0.1
+            cloud.scale.set(pulse, pulse, pulse)
+        })
     }
 
-    // 2. Sun Orbit Animation
+    // 4. Sun orbit and Lighting
     if (!dirLightRef.current) return
-    const timeRatio = sunTime / 24.0
-    const angle = timeRatio * Math.PI * 2 - (Math.PI / 2)
+    const [sx, sy, sz] = atmosphereParams.sunPos
+    dirLightRef.current.position.set(sx, sy, sz)
     
-    const radius = 800
-    dirLightRef.current.position.y = Math.sin(angle) * radius
-    dirLightRef.current.position.z = Math.cos(angle) * radius
-    dirLightRef.current.position.x = 200
+    const normalizedY = Math.max(0, Math.min(1, sy / 800))
     
-    const normalizedY = Math.max(0, Math.min(1, dirLightRef.current.position.y / radius))
-    
-    // Cinematic Color Grading
-    if (normalizedY < 0.2 && dirLightRef.current.position.y > 0) {
-      // Golden Hour (Sunrise/Sunset)
-      dirLightRef.current.color.set('#ff7b00')
-      dirLightRef.current.intensity = 2.0
-    } else if (dirLightRef.current.position.y > 0) {
-      // Midday (Bright White/Blue)
-      dirLightRef.current.color.set('#ffffff')
-      dirLightRef.current.intensity = 2.5
+    if (sy > 0) {
+      if (normalizedY < 0.25) {
+        // Morning/Evening Golden Hour
+        dirLightRef.current.color.set('#ff9d4d')
+        dirLightRef.current.intensity = 1.2
+      } else {
+        // High Noon
+        dirLightRef.current.color.set('#fff4e6')
+        dirLightRef.current.intensity = 1.8
+      }
     } else {
-      // Moonlight
-      dirLightRef.current.color.set('#203060')
-      dirLightRef.current.intensity = 0.5
+        // Moonlight
+        dirLightRef.current.color.set('#6a8aff')
+        dirLightRef.current.intensity = 0.3
     }
   })
 
-  // Calculate sun position for the Sky shader
-  const timeRatio = sunTime / 24.0
-  const angle = timeRatio * Math.PI * 2 - (Math.PI / 2)
-  const sunPos = new THREE.Vector3(
-    Math.cos(angle) * 800,
-    Math.sin(angle) * 800,
-    100 
-  )
-
   return (
-    <group name="cinematic-sky-system">
-      {/* 1. Atmospheric Fog */}
-      {isNight ? (
-        <fog attach="fog" args={['#0a0f18', 200, 2000]} />
-      ) : (
-        <fog attach="fog" args={['#ccf0ff', 300, 2500]} />
-      )}
+    <group name="sky-atmosphere">
+      {/* Dynamic Fog with expanded Far Clip */}
+      <fog attach="fog" args={[atmosphereParams.fogColor, 2000, 45000]} />
 
-      {/* 2. Volumetric Clouds matching Sun Direction */}
-      {isHighTier && (
-        <group ref={cloudGroupRef}>
-          <Clouds material={THREE.MeshBasicMaterial} limit={400} range={500}>
-            <Cloud 
-              seed={1} 
-              scale={2.5} 
-              volume={15} 
-              color={isNight ? "#112233" : "#ffffff"} 
-              fade={100} 
-              position={[0, 400, 0]} 
-              speed={0.2} 
-            />
-          </Clouds>
-        </group>
-      )}
+      {/* Wind-Driven Procedural Clouds */}
+      <group ref={cloudGroupRef}>
+        <Clouds material={THREE.MeshBasicMaterial} limit={400}>
+            {/* Multi-layered Cloud System */}
+            {[...Array(25)].map((_, i) => (
+                <Cloud 
+                    key={i}
+                    seed={i + 100}
+                    position={[
+                        (Math.random() - 0.5) * 10000,
+                        400 + Math.random() * 200,
+                        (Math.random() - 0.5) * 10000
+                    ]}
+                    scale={5 + Math.random() * 10} 
+                    volume={15 + Math.random() * 20} 
+                    color={isNight ? "#0a1a2a" : "#ffffff"}
+                    fade={800}
+                    speed={0.1}
+                    opacity={0.3 + Math.random() * 0.4}
+                />
+            ))}
+        </Clouds>
+      </group>
 
-      {/* 3. Aerial Perspective Sky Scattering */}
-      {!isNight && (
-        <Sky 
-          distance={450000} 
-          sunPosition={sunPos} 
-          inclination={0} 
-          azimuth={0.25} 
-          mieCoefficient={0.005} 
-          mieDirectionalG={0.8} 
-          rayleigh={2} 
-          turbidity={5} 
-        />
-      )}
+      {/* Atmospheric Scattering */}
+      <Sky 
+        distance={450000} 
+        sunPosition={atmosphereParams.sunPos} 
+        mieCoefficient={atmosphereParams.mieCoefficient} 
+        mieDirectionalG={0.8} 
+        rayleigh={atmosphereParams.rayleigh} 
+        turbidity={atmosphereParams.turbidity} 
+      />
 
-      {/* 4. HDRI Environment Mapping for physically based water/rock reflections */}
       <Environment preset={isNight ? "night" : "sunset"} background={false} />
 
-      {/* 5. Directional Sunlight / Moonlight */}
-      <ambientLight intensity={isNight ? 0.2 : 0.6} color={isNight ? "#203060" : "#ffffff"} />
-      
-      {isHighTier && <SoftShadows size={40} samples={16} focus={0.5} />}
+      <ambientLight intensity={isNight ? 0.1 : 0.4} color={isNight ? "#203060" : "#fff4e6"} />
       
       <directionalLight
         ref={dirLightRef}
@@ -111,11 +144,11 @@ export function SkySystem() {
         shadow-mapSize-width={isHighTier ? 2048 : 512}
         shadow-mapSize-height={isHighTier ? 2048 : 512}
         shadow-camera-near={1}
-        shadow-camera-far={2000}
-        shadow-camera-left={-800}
-        shadow-camera-right={800}
-        shadow-camera-top={800}
-        shadow-camera-bottom={-800}
+        shadow-camera-far={15000}
+        shadow-camera-left={-5000}
+        shadow-camera-right={5000}
+        shadow-camera-top={5000}
+        shadow-camera-bottom={-5000}
         shadow-bias={-0.0001}
       />
     </group>
