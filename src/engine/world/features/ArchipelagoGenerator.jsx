@@ -15,16 +15,6 @@ function mulberry32(a) {
   }
 }
 
-/**
- * CAD CITY — Procedural Archipelago Generator
- * 
- * Scale: 1 engine unit = 1 meter
- * Base geometry: PlaneGeometry(100, 100) → radius 50
- * 
- * Central island: scale [5.0, 8.0, 5.0] → 500m diameter, 480m max peak height
- * Y-scale 8.0 allows displacement of 0-60 to produce 0-480m peaks
- * Satellites: scale 1.0-3.0 on XZ, 3.0-6.0 on Y
- */
 export function ArchipelagoGenerator() {
   const seed = useGameStore(state => state.seed)
 
@@ -42,7 +32,7 @@ export function ArchipelagoGenerator() {
       terrainType: 0.0
     })
 
-    // 12 Satellite Islands — up to 800m diameter
+    // 12 Satellite Islands — Expansive spacing (5km radius)
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2 + (random() - 0.5) * 1.5
       const radius = 1500 + random() * 3500
@@ -66,7 +56,6 @@ export function ArchipelagoGenerator() {
     return islands
   }, [seed])
 
-  // Extract arrays for uniforms as flat Float32Arrays for shader compatibility
   const islandPositions = useMemo(() => {
     const arr = new Float32Array(13 * 3)
     islandData.forEach((is, i) => {
