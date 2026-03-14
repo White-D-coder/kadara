@@ -45,7 +45,7 @@ export function ArchipelagoGenerator() {
     // 12 Satellite Islands — up to 800m diameter
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2 + (random() - 0.5) * 1.5
-      const radius = 600 + random() * 1200
+      const radius = 1500 + random() * 3500
 
       const x = Math.cos(angle) * radius
       const z = Math.sin(angle) * radius
