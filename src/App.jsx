@@ -26,7 +26,7 @@ function UIOverlay() {
           <span className="mac-min"></span>
           <span className="mac-max"></span>
         </div>
-        <h1>Kadara Engine</h1>
+        <h1>CAD CITY Engine</h1>
       </div>
       
       <div className="status-grid">
@@ -54,16 +54,11 @@ function UIOverlay() {
 function Scene() {
   return (
     <>
-      {/* Managers & Systems */}
       <GraphicsManager />
       <AdaptiveQualityManager />
       <InputManager />
       <CameraController />
-
-      {/* Cinematic Phase 7 Core Engine */}
       <ArchipelagoGenerator />
-      
-      {/* Visuals */}
       <KadaraPostProcessing />
     </>
   )
@@ -72,13 +67,13 @@ function Scene() {
 export default function App() {
   return (
     <div className="app-container">
-      <Canvas shadows camera={{ fov: 60, near: 0.5, far: 80000 }}>
+      <Canvas shadows camera={{ fov: 60, near: 0.5, far: 15000 }}>
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
       </Canvas>
       <UIOverlay />
-      <div className="version-tag">Phase 7: Cinematic Open World</div>
+      <div className="version-tag">CAD CITY — Cinematic Archipelago</div>
     </div>
   )
 }
