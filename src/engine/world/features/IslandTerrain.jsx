@@ -97,48 +97,57 @@ export function IslandTerrain({ islands }) {
         }
         return v;
       }
+      
+      float getTerrainDisplacement(vec3 worldPos, vec2 localPos) {
+        float noiseVal = fbm(worldPos * 0.003);
+        float ridge = pow(1.0 - abs(snoise(worldPos * 0.008)), 4.0);
+        
+        float distFromCenter = length(localPos);
+        float edgeFade = 1.0 - smoothstep(20.0, 50.0, distFromCenter);
+        
+        return (noiseVal * 8.0 + ridge * 12.0) * edgeFade;
+      }
 
       ${shader.vertexShader}
     `.replace(
-      '#include <worldpos_vertex>',
+      '#include <begin_vertex>',
       `
-      #include <worldpos_vertex>
+      #include <begin_vertex>
       
-      // Calculate world position
       vec4 instanceWorldPos = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
       
-      // Geological Terrain Displacement (Erosion + Ridges)
-      // Base frequency
-      float noiseVal = fbm(instanceWorldPos.xyz * 0.02);
+      float displacement = getTerrainDisplacement(instanceWorldPos.xyz, position.xy);
+      transformed += normal * displacement;
       
-      // Add sharp ridges (erosion simulation)
-      float ridge = 1.0 - abs(snoise(instanceWorldPos.xyz * 0.05));
-      ridge = pow(ridge, 4.0);
+      float sinkEdge = smoothstep(30.0, 50.0, length(position.xy)) * -20.0;
+      transformed += normal * sinkEdge;
       
-      // Smooth out the shoreline so beaches form naturally at Y ~ 0
-      float shoreSmoothing = smoothstep(0.0, 15.0, instanceWorldPos.y);
+      vec4 finalWorldPos = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+      vWorldPosition = finalWorldPos.xyz;
       
-      float displacement = (noiseVal * 10.0 + ridge * 15.0) * shoreSmoothing;
+      // Compute Analytic Normal via Finite Difference
+      float offset = 0.1;
+      vec3 p1 = instanceWorldPos.xyz;
       
-      // Displace position along normal
-      vec3 displacedPos = transformed + normal * displacement;
+      // Calculate local tangents (assuming rotated plane aligned to XZ)
+      vec3 tX = (modelMatrix * instanceMatrix * vec4(offset, 0.0, 0.0, 0.0)).xyz;
+      vec3 tZ = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, offset, 0.0)).xyz;
       
-      // Recalculate World Position and Normal
-      instanceWorldPos = modelMatrix * instanceMatrix * vec4(displacedPos, 1.0);
-      vWorldPosition = instanceWorldPos.xyz;
+      vec3 worldX = p1 + tX;
+      vec3 worldZ = p1 + tZ;
       
-      // Estimate new normal via finite difference for lighting
-      vWorldNormal = normalize((modelMatrix * instanceMatrix * vec4(normal, 0.0)).xyz);
+      float dX = getTerrainDisplacement(worldX, position.xy + vec2(offset, 0.0));
+      float dZ = getTerrainDisplacement(worldZ, position.xy + vec2(0.0, offset));
       
-      // Pass to fragment
+      // Determine height differences in World Space (assuming normal is conceptually Y)
+      vec3 va = normalize(vec3(length(tX), (dX - displacement) * length(tX), 0.0));
+      vec3 vb = normalize(vec3(0.0, (dZ - displacement) * length(tZ), length(tZ)));
+      
+      vWorldNormal = normalize(cross(vb, va)); // Cross product yields outward normal
+      
       vTerrainType = aTerrainParams.x;
-      vElevation = instanceWorldPos.y;
-      
-      vec4 mvPosition = viewMatrix * instanceWorldPos;
+      vElevation = finalWorldPos.y;
       `
-    ).replace(
-      'gl_Position = projectionMatrix * mvPosition;',
-      'gl_Position = projectionMatrix * mvPosition;'
     );
 
     const terrainFragmentUtils = `
@@ -214,9 +223,10 @@ export function IslandTerrain({ islands }) {
     `;
 
     shader.fragmentShader = terrainFragmentUtils + shader.fragmentShader.replace(
-      '#include <map_fragment>',
+      '#include <roughnessmap_fragment>',
       `
-      #include <map_fragment>
+      #include <roughnessmap_fragment>
+      
       float rockness;
       float wetness;
       diffuseColor.rgb = getPhotorealisticColor(vWorldPosition, vWorldNormal, rockness, wetness);
@@ -232,10 +242,13 @@ export function IslandTerrain({ islands }) {
 
   return (
     <instancedMesh ref={meshRef} args={[null, null, count]} receiveShadow castShadow>
-      {/* High density sphere for rich vertex displacement. ~32k tris per mesh = 256k total */}
-      <sphereGeometry args={[50, 256, 128]}>
+      {/* 128x128 provides 32k polygons per island, perfect balance of fidelity & performance */}
+      <planeGeometry 
+        args={[100, 100, 128, 128]} 
+        ref={(geom) => { if (geom && !geom.rotated) { geom.rotateX(-Math.PI / 2); geom.rotated = true; } }}
+      >
         <instancedBufferAttribute attach="attributes-aTerrainParams" args={[terrainParams, 4]} />
-      </sphereGeometry>
+      </planeGeometry>
       <meshStandardMaterial 
         color="#ffffff" 
         roughness={1.0}
