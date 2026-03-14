@@ -2,6 +2,9 @@ import { useRef, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useTexture } from '@react-three/drei'
 
+const islandGeometry = new THREE.PlaneGeometry(100, 100, 128, 128)
+islandGeometry.rotateX(-Math.PI / 2)
+
 export function IslandTerrain({ islands }) {
   const meshRef = useRef()
   const count = islands ? islands.length : 0
@@ -97,12 +100,11 @@ export function IslandTerrain({ islands }) {
         }
         return v;
       }
-      
-      float getTerrainDisplacement(vec3 worldPos, vec2 localPos) {
+      float getTerrainDisplacement(vec3 worldPos, vec3 localPos) {
         float noiseVal = fbm(worldPos * 0.003);
         float ridge = pow(1.0 - abs(snoise(worldPos * 0.008)), 4.0);
         
-        float distFromCenter = length(localPos);
+        float distFromCenter = length(localPos.xz);
         float edgeFade = 1.0 - smoothstep(20.0, 50.0, distFromCenter);
         
         return (noiseVal * 8.0 + ridge * 12.0) * edgeFade;
@@ -116,10 +118,10 @@ export function IslandTerrain({ islands }) {
       
       vec4 instanceWorldPos = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
       
-      float displacement = getTerrainDisplacement(instanceWorldPos.xyz, position.xy);
-      transformed += normal * displacement;
+      float displacement = getTerrainDisplacement(instanceWorldPos.xyz, position);
+      transformed += normal * 0.0; // TEMPORARILY DISABLED TO PROVE SOURCE OF INFINITY
       
-      float sinkEdge = smoothstep(30.0, 50.0, length(position.xy)) * -20.0;
+      float sinkEdge = smoothstep(30.0, 50.0, length(position.xz)) * -20.0;
       transformed += normal * sinkEdge;
       
       vec4 finalWorldPos = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
@@ -136,8 +138,8 @@ export function IslandTerrain({ islands }) {
       vec3 worldX = p1 + tX;
       vec3 worldZ = p1 + tZ;
       
-      float dX = getTerrainDisplacement(worldX, position.xy + vec2(offset, 0.0));
-      float dZ = getTerrainDisplacement(worldZ, position.xy + vec2(0.0, offset));
+      float dX = getTerrainDisplacement(worldX, position + vec3(offset, 0.0, 0.0));
+      float dZ = getTerrainDisplacement(worldZ, position + vec3(0.0, 0.0, offset));
       
       // Determine height differences in World Space (assuming normal is conceptually Y)
       vec3 va = normalize(vec3(length(tX), (dX - displacement) * length(tX), 0.0));
@@ -241,14 +243,8 @@ export function IslandTerrain({ islands }) {
   if (count === 0) return null
 
   return (
-    <instancedMesh ref={meshRef} args={[null, null, count]} receiveShadow castShadow>
-      {/* 128x128 provides 32k polygons per island, perfect balance of fidelity & performance */}
-      <planeGeometry 
-        args={[100, 100, 128, 128]} 
-        ref={(geom) => { if (geom && !geom.rotated) { geom.rotateX(-Math.PI / 2); geom.rotated = true; } }}
-      >
-        <instancedBufferAttribute attach="attributes-aTerrainParams" args={[terrainParams, 4]} />
-      </planeGeometry>
+    <instancedMesh ref={meshRef} args={[islandGeometry, null, count]} receiveShadow castShadow>
+      <instancedBufferAttribute attach="attributes-aTerrainParams" args={[terrainParams, 4]} />
       <meshStandardMaterial 
         color="#ffffff" 
         roughness={1.0}

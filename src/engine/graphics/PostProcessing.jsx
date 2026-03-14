@@ -1,4 +1,4 @@
-import { EffectComposer, Bloom, SSAO, SMAA } from '@react-three/postprocessing'
+import { EffectComposer, Bloom, SMAA } from '@react-three/postprocessing'
 import { useGameStore, GPU_TIERS } from '../../store/useGameStore'
 
 export function KadaraPostProcessing() {
@@ -21,10 +21,9 @@ export function KadaraPostProcessing() {
     )
   }
 
-  // High Tier: Everything enabled
+  // High Tier: Everything enabled (Removed unstable SSAO)
   return (
-    <EffectComposer disableNormalPass={false}>
-      <SSAO samples={21} radius={10} intensity={15} luminanceInfluence={0.6} />
+    <EffectComposer disableNormalPass>
       <SMAA />
       <Bloom luminanceThreshold={1.0} intensity={0.8} mipmapBlur />
     </EffectComposer>
