@@ -34,9 +34,9 @@ export function IslandTerrain({ islands }) {
   }, [islands])
 
   const onBeforeCompile = useMemo(() => (shader) => {
-    shader.vertexShader = shader.vertexShader.replace(
-      'void main() {',
-      `
+    shader.uniforms.time = { value: 0 }
+    
+    shader.vertexShader = `
       varying float vKElevation;
       varying float vKSlope;
       varying vec3 vKNormal;
@@ -71,50 +71,38 @@ export function IslandTerrain({ islands }) {
       }
 
       float getTerrainHeight(vec3 lp) {
-        // ── Organic Shaping (Domain Warping) ──
         vec2 warp = vec2(fbm(lp * 0.1), fbm(lp * 0.1 + 5.0));
         float d = length(lp.xz + warp * 8.0); 
         float nd = clamp(d / 45.0, 0.0, 1.0);
-
-        // 1. Base Mountain Profile
         float baseHeight = pow(1.0 - nd, 1.6) * 40.0;
-
-        // 2. Sharp Ridges (Image 2)
         float nStep = fbm(lp * 0.15);
         float crags = pow(abs(nStep - 0.5) * 2.0, 1.1) * 15.0;
-        
-        // 3. Erosion Channels & Rivers
         float riverNoise = fbm(lp * 0.25 + 10.0);
         float riverMask = smoothstep(0.48, 0.52, riverNoise) * (1.0 - nd);
         float h = baseHeight + crags - riverMask * 4.0;
-
-        // 4. Natural Plain / Meadow (Plateau replacement)
         float plainMask = smoothstep(12.0, 18.0, d) * smoothstep(22.0, 18.0, d);
         h = mix(h, 6.0 + fbm(lp*0.5)*1.5, plainMask * 0.8);
-
         return max(h, -5.0);
       }
+    ` + shader.vertexShader;
 
-      void main() {
-        vKLocalPos = position;
-        float h = getTerrainHeight(position);
-        
-        // ── Detect Flowing River ──
-        float riverNoise = fbm(position * 0.25 + 10.0);
-        vKRiver = smoothstep(0.46, 0.54, riverNoise); 
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `
+      #include <begin_vertex>
+      vKLocalPos = position;
+      float h = getTerrainHeight(position);
+      vKRiver = smoothstep(0.46, 0.54, fbm(position * 0.25 + 10.0)); 
+      transformed.y += h;
+      vKElevation = h;
+      vKEdgeDist = clamp(length(position.xz) / 45.0, 0.0, 1.0);
 
-        transformed.y += h;
-        vKElevation = h;
-        vKEdgeDist = clamp(length(position.xz) / 45.0, 0.0, 1.0);
-
-        float eps = 0.4; 
-        float hR = getTerrainHeight(position + vec3(eps, 0.0, 0.0));
-        float hF = getTerrainHeight(position + vec3(0.0, 0.0, eps));
-        vec3 localNml = normalize(vec3(h - hR, eps, h - hF));
-
-        vKNormal = normalize((modelMatrix * instanceMatrix * vec4(localNml, 0.0)).xyz);
-        vKSlope = 1.0 - abs(vKNormal.y);
-      }
+      float eps = 0.4; 
+      float hR = getTerrainHeight(position + vec3(eps, 0.0, 0.0));
+      float hF = getTerrainHeight(position + vec3(0.0, 0.0, eps));
+      vec3 localNml = normalize(vec3(h - hR, eps, h - hF));
+      vKNormal = normalize((modelMatrix * instanceMatrix * vec4(localNml, 0.0)).xyz);
+      vKSlope = 1.0 - abs(vKNormal.y);
       `
     );
 
