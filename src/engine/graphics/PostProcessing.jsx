@@ -6,26 +6,24 @@ export function KadaraPostProcessing() {
 
   if (gpuTier === GPU_TIERS.UNKNOWN) return null
 
-  // Low Tier: No effects to ensure 60fps
   if (gpuTier === GPU_TIERS.LOW) {
     return null
   }
 
-  // Medium Tier: Basic Anti-Aliasing and Bloom
   if (gpuTier === GPU_TIERS.MEDIUM) {
     return (
       <EffectComposer disableNormalPass>
         <SMAA />
-        <Bloom luminanceThreshold={1.0} intensity={0.5} mipmapBlur />
+        <Bloom luminanceThreshold={0.9} intensity={0.5} mipmapBlur />
       </EffectComposer>
     )
   }
 
-  // High Tier: Everything enabled (Removed unstable SSAO)
+  // High tier: SMAA + Bloom for sun glints on water
   return (
     <EffectComposer disableNormalPass>
       <SMAA />
-      <Bloom luminanceThreshold={1.0} intensity={0.8} mipmapBlur />
+      <Bloom luminanceThreshold={0.8} intensity={0.7} mipmapBlur />
     </EffectComposer>
   )
 }
