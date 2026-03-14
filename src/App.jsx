@@ -67,7 +67,7 @@ function Scene() {
 export default function App() {
   return (
     <div className="app-container">
-      <Canvas shadows camera={{ fov: 60, near: 0.5, far: 15000 }}>
+      <Canvas shadows camera={{ fov: 60, near: 0.5, far: 50000 }}>
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
