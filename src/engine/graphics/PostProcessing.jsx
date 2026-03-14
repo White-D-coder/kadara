@@ -12,18 +12,18 @@ export function KadaraPostProcessing() {
 
   if (gpuTier === GPU_TIERS.MEDIUM) {
     return (
-      <EffectComposer disableNormalPass>
+      <EffectComposer disableNormalPass stencilBuffer={false}>
         <SMAA />
         <Bloom luminanceThreshold={0.9} intensity={0.5} mipmapBlur />
       </EffectComposer>
     )
   }
 
-  // High tier: SMAA + Bloom for sun glints on water
+  // High tier: SMAA + Bloom for sun starburst (Image 1) and water glints
   return (
-    <EffectComposer disableNormalPass>
+    <EffectComposer disableNormalPass multisampling={0} stencilBuffer={false}>
       <SMAA />
-      <Bloom luminanceThreshold={0.8} intensity={0.7} mipmapBlur />
+      <Bloom luminanceThreshold={0.6} intensity={1.2} mipmapBlur levels={5} />
     </EffectComposer>
   )
 }

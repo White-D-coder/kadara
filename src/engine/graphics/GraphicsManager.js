@@ -3,20 +3,22 @@ import { getGPUTier } from 'detect-gpu'
 import { useGameStore, GPU_TIERS } from '../../store/useGameStore'
 
 export function GraphicsManager() {
+  const gpuTier = useGameStore((state) => state.gpuTier)
   const setGpuTier = useGameStore((state) => state.setGpuTier)
 
   useEffect(() => {
+    // Only detect if it hasn't been detected yet
+    if (gpuTier !== GPU_TIERS.UNKNOWN) return
+
     async function detectTier() {
       try {
         const gpuData = await getGPUTier()
-        let tierLabel = GPU_TIERS.UNKNOWN
+        let tierLabel = GPU_TIERS.LOW
         
         if (gpuData.tier >= 3) {
           tierLabel = GPU_TIERS.HIGH
         } else if (gpuData.tier === 2) {
           tierLabel = gpuData.isMobile ? GPU_TIERS.LOW : GPU_TIERS.MEDIUM
-        } else {
-          tierLabel = GPU_TIERS.LOW
         }
         
         console.log(`[GraphicsManager] Detected GPU: ${gpuData.gpu}, Tier: ${tierLabel}`)
@@ -28,7 +30,7 @@ export function GraphicsManager() {
     }
     
     detectTier()
-  }, [setGpuTier])
+  }, [setGpuTier, gpuTier])
   
-  return null // This is a logic-only component
+  return null
 }
