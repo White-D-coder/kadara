@@ -5,7 +5,7 @@ import { useGameStore } from '../../../store/useGameStore'
 import { IslandTerrain } from './IslandTerrain'
 import { VegetationSystem } from './VegetationSystem'
 import { WaterShader } from './WaterShader'
-import { SkySystem } from './SkySystem'
+import { SkySystemStable } from './SkySystemStable'
 import { UnderwaterEffect } from './UnderwaterEffect'
 
 /*
@@ -110,9 +110,8 @@ export function ArchipelagoGenerator() {
 
   // Scene Composition
   return (
-    <group name="cad-city-archipelago">
-
-      <SkySystem islands={islandData} />
+    <>
+      <SkySystemStable islands={islandData} />
 
       <WaterShader
         islandPositions={islandPositions}
@@ -122,10 +121,9 @@ export function ArchipelagoGenerator() {
 
       <IslandTerrain islands={islandData} />
 
-      <VegetationSystem islands={islandData} />
+      {/* <VegetationSystem islands={islandData} />
 
-      <UnderwaterEffect sunDirection={sunDirection} />
-
-    </group>
+      <UnderwaterEffect sunDirection={sunDirection} /> */}
+    </>
   )
 }

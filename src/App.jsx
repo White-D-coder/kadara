@@ -73,7 +73,7 @@ export default function App() {
         shadows={{ type: THREE.PCFShadowMap }} 
         camera={{ fov: 60, near: 0.5, far: 45000 }}
         gl={{ alpha: false, antialias: true }}
-        onCreated={({ scene }) => { scene.background = new THREE.Color('#05080f') }}
+        onCreated={({ scene }) => { }}
       >
         <Suspense fallback={null}>
           <Scene />
