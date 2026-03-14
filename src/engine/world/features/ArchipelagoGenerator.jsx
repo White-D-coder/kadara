@@ -43,16 +43,16 @@ export function ArchipelagoGenerator() {
       terrainType: 0.0
     })
 
-    // 7 Satellite Islands — 100-300m diameter at 400-800m radius
-    for (let i = 0; i < 7; i++) {
-      const angle = (i / 7) * Math.PI * 2 + (random() - 0.5) * 0.8
-      const radius = 400 + random() * 400
+    // 12 Satellite Islands — 100-300m diameter at 250-700m radius
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2 + (random() - 0.5) * 1.0
+      const radius = 250 + random() * 450
 
       const x = Math.cos(angle) * radius
       const z = Math.sin(angle) * radius
 
-      const s = 1.0 + random() * 2.0
-      const yOffset = -3 - random() * 5
+      const s = 1.0 + random() * 2.5
+      const yOffset = -2 - random() * 4
 
       islands.push({
         id: `sat_${i}`,
