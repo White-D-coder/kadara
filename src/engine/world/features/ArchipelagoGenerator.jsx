@@ -32,8 +32,8 @@ export function ArchipelagoGenerator() {
     islands.push({
       id: 'main',
       isMain: true,
-      position: [0, -10, 0], // submerged slightly 
-      scale: [5.0, 3.0, 5.0], // Increased Y for mountainous center
+      position: [0, -50, 0], // submerged slightly 
+      scale: [50.0, 40.0, 50.0], // Cinematic 5km diameter, 400m+ height
       rotation: random() * Math.PI * 2,
       terrainType: 0.0
     })
@@ -41,20 +41,20 @@ export function ArchipelagoGenerator() {
     // 1-7: Satellite Islands
     for (let i = 0; i < 7; i++) {
       const angle = random() * Math.PI * 2
-      const radius = 300 + random() * 300 // distance from center: 300m - 600m
+      const radius = 5000 + random() * 5000 // distance from center: 5km - 10km
       
       const x = Math.cos(angle) * radius
       const z = Math.sin(angle) * radius
       
-      // Diameter 100-250m -> Radius 50-125m -> Scale 1.0 to 2.5
-      const s = 1.0 + random() * 1.5 
-      const yOffset = -5 - random() * 15 // Sink them variably into the ocean
+      // Scale 10x - 25x for 500m-1.2km islands
+      const s = 10.0 + random() * 15.0 
+      const yOffset = -25 - random() * 100 // Sink them deeper
 
       islands.push({
         id: `sat_${i}`,
         isMain: false,
         position: [x, yOffset, z],
-        scale: [s, 0.8 + random() * 1.5, s],
+        scale: [s, 5.0 + random() * 10.0, s],
         rotation: random() * Math.PI * 2,
         terrainType: 1.0
       })
