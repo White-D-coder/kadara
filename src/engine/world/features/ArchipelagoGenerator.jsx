@@ -32,27 +32,26 @@ export function ArchipelagoGenerator() {
     const random = mulberry32(Math.floor(seed * 1000000))
     const islands = []
 
-    // Central Island — 500m diameter, uniform scale
-    // Height controlled by displacement in shader, not Y-scale
+    // Central Island — 1.5km diameter
     islands.push({
       id: 'main',
       isMain: true,
-      position: [0, -5, 0],
-      scale: [5.0, 5.0, 5.0],
+      position: [0, -15, 0],
+      scale: [15.0, 15.0, 15.0],
       rotation: random() * Math.PI * 2,
       terrainType: 0.0
     })
 
-    // 12 Satellite Islands — 100-300m diameter at 250-700m radius
+    // 12 Satellite Islands — up to 800m diameter
     for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2 + (random() - 0.5) * 1.0
-      const radius = 250 + random() * 450
+      const angle = (i / 12) * Math.PI * 2 + (random() - 0.5) * 1.5
+      const radius = 600 + random() * 1200
 
       const x = Math.cos(angle) * radius
       const z = Math.sin(angle) * radius
 
-      const s = 1.0 + random() * 2.5
-      const yOffset = -2 - random() * 4
+      const s = 3.0 + random() * 5.0
+      const yOffset = -5 - random() * 10
 
       islands.push({
         id: `sat_${i}`,
@@ -67,10 +66,31 @@ export function ArchipelagoGenerator() {
     return islands
   }, [seed])
 
+  // Extract arrays for uniforms as flat Float32Arrays for shader compatibility
+  const islandPositions = useMemo(() => {
+    const arr = new Float32Array(13 * 3)
+    islandData.forEach((is, i) => {
+      if (i < 13) {
+        arr[i * 3 + 0] = is.position[0]
+        arr[i * 3 + 1] = is.position[1]
+        arr[i * 3 + 2] = is.position[2]
+      }
+    })
+    return arr
+  }, [islandData])
+  
+  const islandScales = useMemo(() => {
+    const arr = new Float32Array(13)
+    islandData.forEach((is, i) => {
+      if (i < 13) arr[i] = is.scale[0]
+    })
+    return arr
+  }, [islandData])
+
   return (
     <group name="cad-city-archipelago">
       <SkySystem />
-      <WaterShader />
+      <WaterShader islandPositions={islandPositions} islandScales={islandScales} />
       <IslandTerrain islands={islandData} />
       <VegetationSystem islands={islandData} />
     </group>
