@@ -64,10 +64,17 @@ function Scene() {
   )
 }
 
+import * as THREE from 'three'
+
 export default function App() {
   return (
     <div className="app-container">
-      <Canvas shadows camera={{ fov: 60, near: 0.5, far: 45000 }}>
+      <Canvas 
+        shadows={{ type: THREE.PCFShadowMap }} 
+        camera={{ fov: 60, near: 0.5, far: 45000 }}
+        gl={{ alpha: false, antialias: true }}
+        onCreated={({ scene }) => { scene.background = new THREE.Color('#05080f') }}
+      >
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
