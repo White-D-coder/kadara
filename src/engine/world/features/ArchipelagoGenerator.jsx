@@ -112,8 +112,8 @@ export function ArchipelagoGenerator() {
   return (
     <>
       <SkySystemStable islands={islandData} />
-
-      <WaterShader
+      
+      <WaterShader 
         islandPositions={islandPositions}
         islandScales={islandScales}
         sunDirection={sunDirection}
@@ -121,9 +121,9 @@ export function ArchipelagoGenerator() {
 
       <IslandTerrain islands={islandData} />
 
-      {/* <VegetationSystem islands={islandData} />
+      <VegetationSystem islands={islandData} />
 
-      <UnderwaterEffect sunDirection={sunDirection} /> */}
+      <UnderwaterEffect sunDirection={sunDirection} />
     </>
   )
 }

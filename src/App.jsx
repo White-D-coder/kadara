@@ -59,7 +59,7 @@ function Scene() {
       <InputManager />
       <CameraController />
       <ArchipelagoGenerator />
-      {/* <KadaraPostProcessing /> */}
+      <KadaraPostProcessing />
     </>
   )
 }

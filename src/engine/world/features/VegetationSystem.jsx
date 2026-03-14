@@ -5,93 +5,115 @@ import { useGameStore } from '../../../store/useGameStore'
 // Deterministic PRNG
 function mulberry32(a) {
   return function() {
-    let t = a += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    let _seedState = a += 0x6D2B79F5;
+    _seedState = Math.imul(_seedState ^ _seedState >>> 15, _seedState | 1);
+    _seedState ^= _seedState + Math.imul(_seedState ^ _seedState >>> 7, _seedState | 61);
+    return ((_seedState ^ _seedState >>> 14) >>> 0) / 4294967296;
   }
 }
 
-// Real-scale palm tree geometry (12m tall)
-const trunkGeo = new THREE.CylinderGeometry(0.15, 0.35, 12, 5)
-trunkGeo.translate(0, 6, 0)
+// Tree Geometries
+const palmTrunk = new THREE.CylinderGeometry(0.15, 0.3, 10, 5); palmTrunk.translate(0, 5, 0)
+const palmLeaves = new THREE.ConeGeometry(4, 5, 5); palmLeaves.translate(0, 12, 0)
 
-const palmLeavesGeo = new THREE.ConeGeometry(5, 6, 6)
-palmLeavesGeo.translate(0, 15, 0)
+const pineTrunk = new THREE.CylinderGeometry(0.2, 0.4, 15, 6); pineTrunk.translate(0, 7.5, 0)
+const pineLeaves = new THREE.ConeGeometry(3.5, 12, 6); pineLeaves.translate(0, 16, 0)
+
+const jungleTrunk = new THREE.CylinderGeometry(0.6, 1.2, 20, 8); jungleTrunk.translate(0, 10, 0)
+const jungleLeaves = new THREE.OctahedronGeometry(12, 1); jungleLeaves.translate(0, 25, 0)
 
 export function VegetationSystem({ islands }) {
-  const meshRefTrunks = useRef()
-  const meshRefLeaves = useRef()
+  const meshRefs = useRef({
+    tropical: [useRef(), useRef()],
+    alpine: [useRef(), useRef()],
+    jungle: [useRef(), useRef()]
+  })
   const seed = useGameStore(state => state.seed)
 
-  const trees = useMemo(() => {
-    if (!islands) return { count: 0 }
-    
+  const treeGroups = useMemo(() => {
+    if (!islands) return []
     const random = mulberry32(Math.floor(seed * 10000))
-    const matrices = []
+    const groups = { 0: [], 1: [], 2: [] } // Tropical, Alpine, Jungle
     const dummy = new THREE.Object3D()
-    
+
     islands.forEach((is) => {
-      const islandRadiusLocal = 45 
-      const treeCount = is.isMain ? 800 : Math.floor(is.scale[0] * 40)
-      
+      const treeCount = is.isMain ? 1500 : Math.floor(is.scale[0] * 50) 
+      const islandRadius = is.isMain ? 50 : 40
+
       for (let i = 0; i < treeCount; i++) {
-        const localR = Math.sqrt(random()) * islandRadiusLocal
-        const localAngle = random() * Math.PI * 2
-        const localX = Math.cos(localAngle) * localR
-        const localZ = Math.sin(localAngle) * localR
+        const r = Math.sqrt(random()) * islandRadius
+        const theta = random() * Math.PI * 2
+        const lx = Math.cos(theta) * r
+        const lz = Math.sin(theta) * r
+
+        // Placement checks (avoid cliffs and lagoon)
+        const dist = r / 45.0
+        const profile = Math.pow(1.0 - dist, 1.6)
+        const h = profile * 40.0 // Approximate height for slope check
         
-        const dist = Math.sqrt(localX * localX + localZ * localZ)
-        const normDist = Math.min(dist / 48, 1.0)
-        const profile = Math.pow(0.5 + 0.5 * Math.cos(Math.PI * normDist), 1.0)
-        const localHeight = profile * (0.6 + random() * 0.3) * 25.0
-        
-        const cosR = Math.cos(is.rotation)
-        const sinR = Math.sin(is.rotation)
-        const worldX = is.position[0] + (cosR * localX - sinR * localZ) * is.scale[0]
-        const worldY = is.position[1] + localHeight * is.scale[1]
-        const worldZ = is.position[2] + (sinR * localX + cosR * localZ) * is.scale[2]
-        
-        if (worldY < 3 || worldY > 65) continue
-        
-        const treeScale = (0.6 + random() * 1.5) * (is.isMain ? 1.0 : 0.8)
-        
+        // Pseudo-slope check: if it's too far from center it's likely a cliff
+        if (dist > 0.85 && !is.isMain) continue
+
+        const worldX = is.position[0] + lx * is.scale[0]
+        const worldZ = is.position[2] + lz * is.scale[2]
+        const worldY = is.position[1] + (h * is.scale[1])
+
+        if (worldY < 4.0 || worldY > 75.0) continue
+
         dummy.position.set(worldX, worldY, worldZ)
-        dummy.scale.set(treeScale, treeScale, treeScale)
+        const s = (0.5 + random() * 1.5) * (is.isMain ? 1.0 : 0.8)
+        dummy.scale.set(s, s, s)
         dummy.rotation.set(0, random() * Math.PI * 2, 0)
         dummy.updateMatrix()
-        
-        matrices.push(dummy.matrix.clone())
+        if (groups[type].length < 10000) {
+          groups[type].push(dummy.matrix.clone())
+        }
       }
     })
-    
-    return {
-      count: matrices.length,
-      matrices: matrices
-    }
+
+    return groups
   }, [islands, seed])
 
   useEffect(() => {
-    if (!meshRefTrunks.current || !meshRefLeaves.current || trees.count === 0) return
-    
-    trees.matrices.forEach((mat, i) => {
-      meshRefTrunks.current.setMatrixAt(i, mat)
-      meshRefLeaves.current.setMatrixAt(i, mat)
+    const refs = meshRefs.current
+    Object.keys(treeGroups).forEach((type) => {
+      const matrices = treeGroups[type]
+      const g = type === '0' ? refs.tropical : (type === '1' ? refs.alpine : refs.jungle)
+      if (g[0].current && g[1].current) {
+        matrices.forEach((mat, i) => {
+          g[0].current.setMatrixAt(i, mat)
+          g[1].current.setMatrixAt(i, mat)
+        })
+        g[0].current.instanceMatrix.needsUpdate = true
+        g[1].current.instanceMatrix.needsUpdate = true
+      }
     })
-    
-    meshRefTrunks.current.instanceMatrix.needsUpdate = true
-    meshRefLeaves.current.instanceMatrix.needsUpdate = true
-  }, [trees])
-
-  if (trees.count === 0) return null
+  }, [treeGroups])
 
   return (
-    <group name="vegetation">
-      <instancedMesh ref={meshRefTrunks} args={[trunkGeo, null, trees.count]} receiveShadow castShadow>
-        <meshStandardMaterial color="#5a4030" roughness={0.9} />
+    <group name="vegetation-optimized">
+      {/* Tropical Palms */}
+      <instancedMesh ref={meshRefs.current.tropical[0]} args={[palmTrunk, null, 10000]}>
+        <meshStandardMaterial color="#3d2a1d" roughness={0.9} />
       </instancedMesh>
-      <instancedMesh ref={meshRefLeaves} args={[palmLeavesGeo, null, trees.count]} receiveShadow castShadow>
-        <meshStandardMaterial color="#228B22" roughness={0.7} />
+      <instancedMesh ref={meshRefs.current.tropical[1]} args={[palmLeaves, null, 10000]}>
+        <meshStandardMaterial color="#2d5a27" roughness={0.6} emissive="#051a05" emissiveIntensity={0.2} />
+      </instancedMesh>
+
+      {/* Alpine Pines */}
+      <instancedMesh ref={meshRefs.current.alpine[0]} args={[pineTrunk, null, 10000]}>
+        <meshStandardMaterial color="#2a1a10" roughness={1.0} />
+      </instancedMesh>
+      <instancedMesh ref={meshRefs.current.alpine[1]} args={[pineLeaves, null, 10000]}>
+        <meshStandardMaterial color="#1a2d1a" roughness={0.8} />
+      </instancedMesh>
+
+      {/* Jungle Giants */}
+      <instancedMesh ref={meshRefs.current.jungle[0]} args={[jungleTrunk, null, 10000]}>
+        <meshStandardMaterial color="#4a3a2a" roughness={0.9} />
+      </instancedMesh>
+      <instancedMesh ref={meshRefs.current.jungle[1]} args={[jungleLeaves, null, 10000]}>
+        <meshStandardMaterial color="#0a3a0a" roughness={0.5} opacity={0.9} transparent />
       </instancedMesh>
     </group>
   )
