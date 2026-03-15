@@ -65,8 +65,8 @@ export function VegetationSystem({ islands }) {
         dummy.scale.set(s, s, s)
         dummy.rotation.set(0, random() * Math.PI * 2, 0)
         dummy.updateMatrix()
-        if (groups[type].length < 10000) {
-          groups[type].push(dummy.matrix.clone())
+        if (groups[is.floraType].length < 10000) {
+          groups[is.floraType].push(dummy.matrix.clone())
         }
       }
     })
