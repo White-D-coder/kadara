@@ -170,15 +170,15 @@ export function SkySystemStable({ islands = [] }) {
       {/* Directional Sun */}
       <directionalLight
         ref={dirLightRef}
-        castShadow
-        shadow-mapSize-width={512}
-        shadow-mapSize-height={512}
+        castShadow={!isLowTier}
+        shadow-mapSize-width={isHighTier ? 2048 : 512}
+        shadow-mapSize-height={isHighTier ? 2048 : 512}
         shadow-camera-near={1}
-        shadow-camera-far={15000}
-        shadow-camera-left={-5000}
-        shadow-camera-right={5000}
-        shadow-camera-top={5000}
-        shadow-camera-bottom={-5000}
+        shadow-camera-far={isHighTier ? 15000 : 5000}
+        shadow-camera-left={isHighTier ? -5000 : -2000}
+        shadow-camera-right={isHighTier ? 5000 : 2000}
+        shadow-camera-top={isHighTier ? 5000 : 2000}
+        shadow-camera-bottom={isHighTier ? -5000 : -2000}
         shadow-bias={-0.0001}
       />
     </group>

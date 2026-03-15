@@ -29,6 +29,12 @@ export function VegetationSystem({ islands }) {
     jungle: [useRef(), useRef()]
   })
   const seed = useGameStore(state => state.seed)
+  const gpuTier = useGameStore(state => state.gpuTier)
+  
+  const isHighTier = gpuTier === 'Tier 3 (High)'
+  const isMidTier = gpuTier === 'Tier 2 (Mid)'
+  const isLowTier = !isHighTier && !isMidTier
+  const maxInstances = isHighTier ? 10000 : (isMidTier ? 5000 : 2000)
 
   const treeGroups = useMemo(() => {
     if (!islands) return []
@@ -36,8 +42,9 @@ export function VegetationSystem({ islands }) {
     const groups = { 0: [], 1: [], 2: [] } // Tropical, Alpine, Jungle
     const dummy = new THREE.Object3D()
 
+
     islands.forEach((is) => {
-      const treeCount = is.isMain ? 1500 : Math.floor(is.scale[0] * 50) 
+      const treeCount = is.isMain ? (isHighTier ? 1500 : 800) : Math.floor(is.scale[0] * (isHighTier ? 50 : 25)) 
       const islandRadius = is.isMain ? 50 : 40
 
       for (let i = 0; i < treeCount; i++) {
@@ -65,7 +72,7 @@ export function VegetationSystem({ islands }) {
         dummy.scale.set(s, s, s)
         dummy.rotation.set(0, random() * Math.PI * 2, 0)
         dummy.updateMatrix()
-        if (groups[is.floraType].length < 10000) {
+        if (groups[is.floraType].length < maxInstances) {
           groups[is.floraType].push(dummy.matrix.clone())
         }
       }
@@ -90,31 +97,33 @@ export function VegetationSystem({ islands }) {
     })
   }, [treeGroups])
 
-  return (
-    <group name="vegetation-optimized">
-      {/* Tropical Palms */}
-      <instancedMesh ref={meshRefs.current.tropical[0]} args={[palmTrunk, null, 10000]}>
-        <meshStandardMaterial color="#3d2a1d" roughness={0.9} />
-      </instancedMesh>
-      <instancedMesh ref={meshRefs.current.tropical[1]} args={[palmLeaves, null, 10000]}>
-        <meshStandardMaterial color="#2d5a27" roughness={0.6} emissive="#051a05" emissiveIntensity={0.2} />
-      </instancedMesh>
+    const Material = isLowTier ? 'meshLambertMaterial' : 'meshStandardMaterial'
 
-      {/* Alpine Pines */}
-      <instancedMesh ref={meshRefs.current.alpine[0]} args={[pineTrunk, null, 10000]}>
-        <meshStandardMaterial color="#2a1a10" roughness={1.0} />
-      </instancedMesh>
-      <instancedMesh ref={meshRefs.current.alpine[1]} args={[pineLeaves, null, 10000]}>
-        <meshStandardMaterial color="#1a2d1a" roughness={0.8} />
-      </instancedMesh>
-
-      {/* Jungle Giants */}
-      <instancedMesh ref={meshRefs.current.jungle[0]} args={[jungleTrunk, null, 10000]}>
-        <meshStandardMaterial color="#4a3a2a" roughness={0.9} />
-      </instancedMesh>
-      <instancedMesh ref={meshRefs.current.jungle[1]} args={[jungleLeaves, null, 10000]}>
-        <meshStandardMaterial color="#0a3a0a" roughness={0.5} opacity={0.9} transparent />
-      </instancedMesh>
-    </group>
-  )
-}
+    return (
+      <group name="vegetation-optimized">
+        {/* Tropical Palms */}
+        <instancedMesh ref={meshRefs.current.tropical[0]} args={[palmTrunk, null, maxInstances]} castShadow={!isLowTier}>
+          <Material color="#3d2a1d" {...(isLowTier ? {} : { roughness: 0.9 })} />
+        </instancedMesh>
+        <instancedMesh ref={meshRefs.current.tropical[1]} args={[palmLeaves, null, maxInstances]} castShadow={!isLowTier}>
+          <Material color="#2d5a27" {...(isLowTier ? {} : { roughness: 0.6, emissive: "#051a05", emissiveIntensity: 0.2 })} />
+        </instancedMesh>
+  
+        {/* Alpine Pines */}
+        <instancedMesh ref={meshRefs.current.alpine[0]} args={[pineTrunk, null, maxInstances]} castShadow={!isLowTier}>
+          <Material color="#2a1a10" {...(isLowTier ? {} : { roughness: 1.0 })} />
+        </instancedMesh>
+        <instancedMesh ref={meshRefs.current.alpine[1]} args={[pineLeaves, null, maxInstances]} castShadow={!isLowTier}>
+          <Material color="#1a2d1a" {...(isLowTier ? {} : { roughness: 0.8 })} />
+        </instancedMesh>
+  
+        {/* Jungle Giants */}
+        <instancedMesh ref={meshRefs.current.jungle[0]} args={[jungleTrunk, null, maxInstances]} castShadow={!isLowTier}>
+          <Material color="#4a3a2a" {...(isLowTier ? {} : { roughness: 0.9 })} />
+        </instancedMesh>
+        <instancedMesh ref={meshRefs.current.jungle[1]} args={[jungleLeaves, null, maxInstances]} castShadow={!isLowTier}>
+          <Material color="#0a3a0a" {...(isLowTier ? {} : { roughness: 0.5, opacity: 0.9, transparent: true })} />
+        </instancedMesh>
+      </group>
+    )
+  }

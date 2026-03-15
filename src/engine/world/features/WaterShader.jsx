@@ -210,7 +210,7 @@ export function WaterShader({ islandPositions, islandScales, sunDirection }) {
 
   return (
     <mesh ref={meshRef} rotation-x={-Math.PI / 2} receiveShadow>
-      <planeGeometry args={[10000, 10000, 256, 256]} />
+      <planeGeometry args={[10000, 10000, isLowTier ? 128 : 256, isLowTier ? 128 : 256]} />
       <shaderMaterial
         vertexShader={vertexShader}
         fragmentShader={fragShader}

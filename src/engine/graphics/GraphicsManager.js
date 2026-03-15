@@ -8,7 +8,7 @@ export function GraphicsManager() {
 
   useEffect(() => {
     // Only detect if it hasn't been detected yet
-    if (gpuTier !== GPU_TIERS.UNKNOWN) return
+    if (gpuTier !== GPU_TIERS.UNKNOWN && gpuTier !== 'Detecting...') return
 
     async function detectTier() {
       try {
