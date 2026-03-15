@@ -9,9 +9,13 @@ export function AdaptiveQualityManager() {
   
   const frameTimes = useRef([])
   const lastTime = useRef(performance.now())
+  const startTime = useRef(performance.now())
+  const lowFpsCounter = useRef(0)
+  const highFpsCounter = useRef(0)
 
   useFrame(() => {
     const now = performance.now()
+    const uptime = (now - startTime.current) / 1000
     const dt = now - lastTime.current
     lastTime.current = now
 
@@ -22,11 +26,32 @@ export function AdaptiveQualityManager() {
       const fps = Math.round(1000 / avgDt)
       setFps(fps)
 
-      // Downscale if performance is poor (under 25 FPS for 2 seconds)
+      // Grace period: No downscaling within first 10 seconds
+      if (uptime < 10) return
+
+      // Downscale if performance is poor (under 25 FPS for 5 seconds)
       if (fps < 25 && gpuTier !== GPU_TIERS.LOW) {
-        // Simple smoothing: check if it stays low
-        console.warn(`[AdaptiveQuality] Low performance detected (${fps} FPS). Downscaling quality...`)
-        setGpuTier(GPU_TIERS.LOW)
+        lowFpsCounter.current++
+        if (lowFpsCounter.current > 300) { // Approx 5 seconds at 60Hz
+          console.warn(`[AdaptiveQuality] Sustained low performance detected (${fps} FPS). Downscaling quality...`)
+          setGpuTier(GPU_TIERS.LOW)
+          lowFpsCounter.current = 0
+        }
+      } else {
+        lowFpsCounter.current = 0
+      }
+
+      // Upscale if performance is great (over 55 FPS for 10 seconds)
+      if (fps > 55 && gpuTier === GPU_TIERS.LOW) {
+        highFpsCounter.current++
+        if (highFpsCounter.current > 600) {
+          console.log(`[AdaptiveQuality] Performance recovered (${fps} FPS). Checking if we can upscale...`)
+          // We can't easily jump back with full confidence, but we can try MID
+          setGpuTier(GPU_TIERS.MEDIUM)
+          highFpsCounter.current = 0
+        }
+      } else {
+        highFpsCounter.current = 0
       }
     }
   })
