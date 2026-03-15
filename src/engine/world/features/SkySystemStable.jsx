@@ -132,25 +132,69 @@ export function SkySystemStable({ islands = [] }) {
 
   return (
     <group name="sky-atmosphere">
-      <fog attach="fog" args={[atmosphereParams.fogColor, 6000, 45000]} />
+      <fog ref={fogRef} attach="fog" args={[atmosphereParams.fogColor, 6000, 45000]} />
+
+      {/* ── Vivid Blue Sky ── */}
+      <Sky
+        distance={450000}
+        sunPosition={atmosphereParams.sunPos}
+        mieCoefficient={atmosphereParams.mieCoefficient}
+        mieDirectionalG={atmosphereParams.mieDirectionalG}
+        rayleigh={atmosphereParams.rayleigh}
+        turbidity={atmosphereParams.turbidity}
+      />
+
+      {/* ── Environment for Material Reflections ── */}
+      <Environment preset={isNight ? 'night' : 'city'} background={false} />
+
+      {/* ── Ambient Fill ── */}
+      <ambientLight
+        intensity={isNight ? 0.08 : 0.5}
+        color={isNight ? '#1a2a50' : '#e8f0ff'}
+      />
+
+      {/* ── Hemisphere Light ── */}
+      <hemisphereLight
+        args={[
+          isNight ? '#1a2a50' : '#87ceeb',
+          isNight ? '#050810' : '#3a6b35',
+          isNight ? 0.1 : 0.4
+        ]}
+      />
+
+      {/* ── Directional Sun ── */}
+      <directionalLight
+        ref={dirLightRef}
+        castShadow
+        shadow-mapSize-width={isHighTier ? 1024 : 512}
+        shadow-mapSize-height={isHighTier ? 1024 : 512}
+        shadow-camera-near={1}
+        shadow-camera-far={15000}
+        shadow-camera-left={-5000}
+        shadow-camera-right={5000}
+        shadow-camera-top={5000}
+        shadow-camera-bottom={-5000}
+        shadow-bias={-0.0001}
+      />
 
       {!isLowTier && (
-        <Clouds material={THREE.MeshBasicMaterial}>
-          {CLOUD_POSITIONS.slice(0, isHighTier ? 16 : 8).map((pos, i) => (
-            <Cloud
-              key={i}
-              seed={i + 200}
-              position={pos}
-              scale={25 + (i % 5) * 10}
-              scale={25 + (i % 5) * 12}
-              volume={30 + (i % 4) * 20}
-              color="#ffffff"
-              fade={3000}
-              speed={0.1}
-              opacity={0.3 + (i % 3) * 0.1}
-            />
-          ))}
-        </Clouds>
+        <group ref={cloudGroupRef}>
+          <Clouds material={THREE.MeshBasicMaterial}>
+            {CLOUD_POSITIONS.slice(0, isHighTier ? 16 : 8).map((pos, i) => (
+              <Cloud
+                key={i}
+                seed={i + 200}
+                position={pos}
+                scale={25 + (i % 5) * 12}
+                volume={30 + (i % 4) * 20}
+                color="#ffffff"
+                fade={3000}
+                speed={0.1}
+                opacity={0.3 + (i % 3) * 0.1}
+              />
+            ))}
+          </Clouds>
+        </group>
       )}
     </group>
   )
