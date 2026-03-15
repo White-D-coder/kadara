@@ -49,8 +49,8 @@ export function ArchipelagoGenerator() {
     islands.push({
       id: 'main',
       isMain: true,
-      position: [0, -18, 0],
-      scale: [18, 22, 18], 
+      position: [0, -5, 0],
+      scale: [20, 18, 20], 
       rotation: random() * Math.PI * 2,
       terrainType: 0.0,
       weatherType: 0, // Main island starts clear
@@ -60,20 +60,20 @@ export function ArchipelagoGenerator() {
     // SATELLITE ISLANDS (Varied shapes and climates)
     for (let i = 0; i < 15; i++) {
       const angle = (i / 15) * Math.PI * 2 + (random() - 0.5) * 1.5
-      const radius = 1500 + random() * 4500
+      const radius = 1200 + random() * 4000
 
       const x = Math.cos(angle) * radius
       const z = Math.sin(angle) * radius
 
       const pillarWeight = random()
-      const s = pillarWeight > 0.8 ? (4 + random() * 6) : (2 + random() * 3)
-      const yOffset = pillarWeight > 0.8 ? -8 : (-5 - random() * 12)
+      const s = pillarWeight > 0.8 ? (5 + random() * 7) : (3 + random() * 5)
+      const yOffset = -3 - random() * 4
 
       islands.push({
         id: `sat_${i}`,
         isMain: false,
         position: [x, yOffset, z],
-        scale: [s, s * (pillarWeight > 0.8 ? 1.5 : 1.0), s],
+        scale: [s, s * (pillarWeight > 0.8 ? 1.3 : 0.9), s],
         rotation: random() * Math.PI * 2,
         terrainType: 1.0,
         weatherType: Math.floor(random() * 3), // Random: Clear, Stormy, Foggy
