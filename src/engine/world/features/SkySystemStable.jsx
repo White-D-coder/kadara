@@ -115,7 +115,7 @@ export function SkySystemStable({ islands = [] }) {
   const atmosphereParams = useMemo(() => {
     const isSunset  = sunTime > 16 && sunTime < 20
     const isSunrise = sunTime > 4 && sunTime < 8
-    const fogColor = isNight ? '#030810' : (isSunset ? '#8a3a15' : (isSunrise ? '#4a5a8a' : '#1565c0'))
+    const fogColor = isNight ? '#02050a' : (isSunset ? '#8a3a15' : (isSunrise ? '#4a5a8a' : '#2266aa'))
 
     const t = sunTime / 24.0
     const angle = t * Math.PI * 2 - (Math.PI / 2)
@@ -123,64 +123,35 @@ export function SkySystemStable({ islands = [] }) {
     return {
       sunPos: [Math.cos(angle) * 1000, Math.sin(angle) * 1000, 120],
       fogColor,
-      rayleigh: isSunset || isSunrise ? 4.0 : 2.5,
-      turbidity: isNight ? 0.1 : 0.6,
+      rayleigh: isSunset || isSunrise ? 4.0 : (isLowTier ? 3.0 : 2.5),
+      turbidity: isNight ? 0.1 : (isLowTier ? 0.8 : 0.6),
       mieCoefficient: 0.005,
       mieDirectionalG: 0.85
     }
-  }, [sunTime, isNight])
+  }, [sunTime, isNight, isLowTier])
 
   return (
     <group name="sky-atmosphere">
-      <fog attach="fog" args={[atmosphereParams.fogColor, 8000, 50000]} />
+      <fog attach="fog" args={[atmosphereParams.fogColor, 6000, 45000]} />
 
-      {/* ── Dramatic Cumulus Clouds (Hardware Aware) ── */}
       {!isLowTier && (
-        <Clouds material={THREE.MeshBasicMaterial} limit={isHighTier ? 300 : 80}>
-          {CLOUD_POSITIONS.slice(0, isHighTier ? 20 : 8).map((pos, i) => (
+        <Clouds material={THREE.MeshBasicMaterial}>
+          {CLOUD_POSITIONS.slice(0, isHighTier ? 16 : 8).map((pos, i) => (
             <Cloud
               key={i}
               seed={i + 200}
               position={pos}
-              scale={15 + (i % 5) * 5}
-              volume={35 + (i % 4) * 15}
-              color={isNight ? '#0a1a2a' : '#ffffff'}
-              fade={1500}
-              speed={0.12}
-              opacity={0.65 + (i % 3) * 0.15}
+              scale={25 + (i % 5) * 10}
+              scale={25 + (i % 5) * 12}
+              volume={30 + (i % 4) * 20}
+              color="#ffffff"
+              fade={3000}
+              speed={0.1}
+              opacity={0.3 + (i % 3) * 0.1}
             />
           ))}
         </Clouds>
       )}
-
-      {/* ── Vivid Blue Sky ── */}
-      <Sky
-        distance={40000}
-        sunPosition={atmosphereParams.sunPos}
-        mieCoefficient={atmosphereParams.mieCoefficient}
-        mieDirectionalG={atmosphereParams.mieDirectionalG}
-        rayleigh={atmosphereParams.rayleigh}
-        turbidity={atmosphereParams.turbidity}
-      />
-
-      <Environment preset={isNight ? 'night' : 'sunset'} background={false} />
-
-      <ambientLight intensity={isNight ? 0.05 : 0.45} color={isNight ? '#1a2a50' : '#ffffff'} />
-
-      {/* Directional Sun */}
-      <directionalLight
-        ref={dirLightRef}
-        castShadow={!isLowTier}
-        shadow-mapSize-width={isHighTier ? 2048 : 512}
-        shadow-mapSize-height={isHighTier ? 2048 : 512}
-        shadow-camera-near={1}
-        shadow-camera-far={isHighTier ? 15000 : 5000}
-        shadow-camera-left={isHighTier ? -5000 : -2000}
-        shadow-camera-right={isHighTier ? 5000 : 2000}
-        shadow-camera-top={isHighTier ? 5000 : 2000}
-        shadow-camera-bottom={isHighTier ? -5000 : -2000}
-        shadow-bias={-0.0001}
-      />
     </group>
   )
 }
