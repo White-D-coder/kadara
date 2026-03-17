@@ -86,7 +86,7 @@
 // }
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import * as THREE from 'three'
+import * as THREE from 'three/webgpu'
 import { GraphicsManager } from './engine/graphics/GraphicsManager'
 import { KadaraPostProcessing } from './engine/graphics/PostProcessing'
 import { InputManager } from './engine/systems/InputManager'
@@ -155,23 +155,19 @@ export default function App() {
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         camera={{ fov: 60, near: 0.5, far: 45000 }}
-        gl={{
-          alpha: false,
-          antialias: true,
-          // NOTE: EffectComposer will override these at runtime.
-          // ToneMappingFix inside PostProcessing.jsx re-applies
-          // them after the composer mounts. Both are needed.
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 0.85,
-          outputColorSpace: THREE.SRGBColorSpace,
-          powerPreference: 'high-performance',
+        gl={async (canvas) => {
+          const renderer = new THREE.WebGPURenderer({ 
+            canvas,
+            alpha: false,
+            antialias: true,
+            powerPreference: 'high-performance',
+          })
+          await renderer.init()
+          return renderer
         }}
         onCreated={({ gl }) => {
-          // Force-set immediately on canvas creation
-          // before any components mount
           gl.toneMapping         = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 0.85
-          gl.outputColorSpace    = THREE.SRGBColorSpace
         }}
       >
         <Suspense fallback={null}>
