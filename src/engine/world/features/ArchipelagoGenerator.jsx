@@ -1,129 +1,53 @@
-import { useMemo } from 'react'
-import * as THREE from 'three'
-import { useGameStore } from '../../../store/useGameStore'
-
-import { IslandTerrain } from './IslandTerrain'
-import { VegetationSystem } from './VegetationSystem'
-import { WaterShader } from './WaterShader'
-import { SkySystemStable } from './SkySystemStable'
-import { UnderwaterEffect } from './UnderwaterEffect'
-
-/*
-──────────────────────────────────────────────
-  ArchipelagoGenerator — Scene Composition
-──────────────────────────────────────────────
-*/
-
-function mulberry32(a) {
-  return function () {
-    let _seedState = (a += 0x6d2b79f5);
-    _seedState = Math.imul(_seedState ^ (_seedState >>> 15), _seedState | 1);
-    _seedState ^= _seedState + Math.imul(_seedState ^ (_seedState >>> 7), _seedState | 61);
-    return ((_seedState ^ (_seedState >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { useEffect } from 'react'
+import { useThree } from '@react-three/fiber'
+import { Game } from '../../Game.js'
+import { Terrain } from '../Terrain.js'
+import { Water } from '../water.js'
+import { Grass } from '../grass.js'
+import { Wind } from '../wind.js'
+import { Weather } from '../weather.js'
 
 export function ArchipelagoGenerator() {
-  const seed = useGameStore((state) => state.seed)
-  const sunTime = useGameStore((state) => state.sunTime)
+    const { scene, camera, gl } = useThree()
 
-  // Sun Direction (used by water reflections & underwater)
-  const sunDirection = useMemo(() => {
-    const timeRatio = sunTime / 24
-    const angle = timeRatio * Math.PI * 2 - Math.PI / 2
+    useEffect(() => {
+        // Initialize Game singleton with scene and renderer
+        const game = Game.getInstance()
+        game.scene = scene
+        game.camera = camera
+        game.gl = gl
 
-    const dir = new THREE.Vector3(
-      Math.cos(angle),
-      Math.sin(angle),
-      0.2
-    )
-    return dir.normalize()
-  }, [sunTime])
+        // Create world systems in order
+        const weather = new Weather()
+        game.weather = weather
 
-  // Generate Islands (deterministic)
-  const islandData = useMemo(() => {
-    const random = mulberry32(Math.floor(seed * 1000000))
-    const islands = []
+        const wind = new Wind()
+        game.wind = wind
 
-    // MAIN ISLAND (Image 2 Alpine Mountain)
-    islands.push({
-      id: 'main',
-      isMain: true,
-      position: [0, -5, 0],
-      scale: [20, 18, 20], 
-      rotation: random() * Math.PI * 2,
-      terrainType: 0.0,
-      weatherType: 0, // Main island starts clear
-      floraType: 2,   // Dense jungle/alpine mix
-    })
+        const terrain = new Terrain()
+        game.terrain = terrain
 
-    // SATELLITE ISLANDS (Varied shapes and climates)
-    for (let i = 0; i < 15; i++) {
-      const angle = (i / 15) * Math.PI * 2 + (random() - 0.5) * 1.5
-      const radius = 1200 + random() * 4000
+        const water = new Water()
+        game.water = water
 
-      const x = Math.cos(angle) * radius
-      const z = Math.sin(angle) * radius
+        const grass = new Grass()
+        game.grass = grass
 
-      const pillarWeight = random()
-      const s = pillarWeight > 0.8 ? (5 + random() * 7) : (3 + random() * 5)
-      const yOffset = -3 - random() * 4
+        return () => {
+            // Cleanup: remove objects from scene on unmount
+            if (terrain.mesh) scene.remove(terrain.mesh)
+            if (water.mesh) scene.remove(water.mesh)
+            if (grass.mesh) scene.remove(grass.mesh)
+            
+            // Dispose geometries and materials
+            if (terrain.geometry) terrain.geometry.dispose()
+            if (terrain.material) terrain.material.dispose()
+            if (water.geometry) water.geometry.dispose()
+            if (water.material) water.material.dispose()
+            if (grass.geometry) grass.geometry.dispose()
+            if (grass.material) grass.material.dispose()
+        }
+    }, [scene, camera, gl])
 
-      islands.push({
-        id: `sat_${i}`,
-        isMain: false,
-        position: [x, yOffset, z],
-        scale: [s, s * (pillarWeight > 0.8 ? 1.3 : 0.9), s],
-        rotation: random() * Math.PI * 2,
-        terrainType: 1.0,
-        weatherType: Math.floor(random() * 3), // Random: Clear, Stormy, Foggy
-        floraType: Math.floor(random() * 3),   // Random: Palms, Pines, Jungle
-      })
-    }
-
-    return islands
-  }, [seed])
-
-  // Pack island positions for shader
-  const islandPositions = useMemo(() => {
-    const arr = new Float32Array(16 * 3)
-    islandData.forEach((is, i) => {
-      if (i < 16) {
-        arr[i * 3 + 0] = is.position[0]
-        arr[i * 3 + 1] = is.position[1]
-        arr[i * 3 + 2] = is.position[2]
-      }
-    })
-    return arr
-  }, [islandData])
-
-  // Pack island scales
-  const islandScales = useMemo(() => {
-    const arr = new Float32Array(16)
-    islandData.forEach((is, i) => {
-      if (i < 16) {
-        arr[i] = is.scale[0]
-      }
-    })
-    return arr
-  }, [islandData])
-
-  // Scene Composition
-  return (
-    <>
-      <SkySystemStable islands={islandData} />
-      
-      <WaterShader 
-        islandPositions={islandPositions}
-        islandScales={islandScales}
-        sunDirection={sunDirection}
-      />
-
-      <IslandTerrain islands={islandData} />
-
-      <VegetationSystem islands={islandData} />
-
-      <UnderwaterEffect sunDirection={sunDirection} />
-    </>
-  )
+    return null
 }
