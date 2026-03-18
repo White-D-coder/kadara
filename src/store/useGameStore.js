@@ -1,27 +1,44 @@
 import { create } from 'zustand'
 
-export const GPU_TIERS = {
-  UNKNOWN: 'Detecting...',
-  LOW: 'Tier 1 (Low)',
-  MEDIUM: 'Tier 2 (Mid)',
-  HIGH: 'Tier 3 (High)'
-}
-
 export const CAMERA_MODES = {
-  PLANNER: 'PLANNER',
-  FPV: 'FPV'
+  FPV: 'FPV',
+  PLANNER: 'PLANNER'
 }
 
-export const useGameStore = create((set) => ({
-  seed: 0.123456,
-  gpuTier: GPU_TIERS.UNKNOWN,
+export const GRAPHICS_TIERS = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH'
+}
+
+const useGameStore = create((set) => ({
+  // Core State
+  seed: 'CAD_CITY_2026',
   cameraMode: CAMERA_MODES.PLANNER,
-  fps: 0,
-  sunTime: 12, // 0-24h cycle
+  graphicsTier: GRAPHICS_TIERS.MEDIUM,
   
-  setSeed: (seed) => set({ seed }),
-  setGpuTier: (tier) => set({ gpuTier: tier }),
+  // Simulation State
+  isSimulationRunning: true,
+  worldTime: 0,
+  
+  // Interaction State
+  hoveredPlot: null,
+  placedBuildings: [],
+  
+  // Actions
   setCameraMode: (mode) => set({ cameraMode: mode }),
-  setFps: (fps) => set({ fps }),
-  setSunTime: (time) => set({ sunTime: time })
+  setGraphicsTier: (tier) => set({ graphicsTier: tier }),
+  toggleSimulation: () => set((state) => ({ isSimulationRunning: !state.isSimulationRunning })),
+  setWorldTime: (time) => set({ worldTime: time }),
+  setSeed: (seed) => set({ seed }),
+  setHoveredPlot: (plot) => set({ hoveredPlot: plot }),
+  
+  addBuilding: (building) => set((state) => ({ 
+    placedBuildings: [...state.placedBuildings, { ...building, id: `build_${Date.now()}` }] 
+  })),
+  removeBuilding: (id) => set((state) => ({
+    placedBuildings: state.placedBuildings.filter((b) => b.id !== id)
+  }))
 }))
+
+export default useGameStore
