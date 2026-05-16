@@ -9,7 +9,7 @@ import useGameStore from '../../store/useGameStore'
 const TYPE_MAP = { main: 0.0, rocky: 1.0 }
 
 const Terrain = () => {
-  const seed    = useGameStore((state) => state.seed)
+  const seed = useGameStore((state) => state.seed)
   const islands = useMemo(() => generateArchipelago(seed), [seed])
 
   const meshRef = useRef()
@@ -25,16 +25,17 @@ const Terrain = () => {
   useEffect(() => {
     if (!meshRef.current) return
 
-    const matrix    = new THREE.Matrix4()
-    const pos       = new THREE.Vector3()
-    const rot       = new THREE.Euler()
-    const scl       = new THREE.Vector3()
-    const quat      = new THREE.Quaternion()
+    const matrix = new THREE.Matrix4()
+    const pos = new THREE.Vector3()
+    const rot = new THREE.Euler()
+    const scl = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
 
-    const seeds     = new Float32Array(islands.length)
-    const types     = new Float32Array(islands.length)
-    const radii     = new Float32Array(islands.length)
-    const peakH     = new Float32Array(islands.length)
+    const seeds = new Float32Array(islands.length)
+    const types = new Float32Array(islands.length)
+    const radii = new Float32Array(islands.length)
+    const peakH = new Float32Array(islands.length)
+
 
     islands.forEach((island, i) => {
       const diameter = island.radius * 2.0
@@ -56,7 +57,7 @@ const Terrain = () => {
     geo.setAttribute('aIslandSeed', new THREE.InstancedBufferAttribute(seeds, 1))
     geo.setAttribute('aIslandType', new THREE.InstancedBufferAttribute(types, 1))
     geo.setAttribute('aIslandRadius', new THREE.InstancedBufferAttribute(radii, 1))
-    geo.setAttribute('aPeakHeight',  new THREE.InstancedBufferAttribute(peakH, 1))
+    geo.setAttribute('aPeakHeight', new THREE.InstancedBufferAttribute(peakH, 1))
 
   }, [islands])
 
