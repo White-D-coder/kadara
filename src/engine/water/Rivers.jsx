@@ -1,6 +1,9 @@
 import React, { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import useGameStore from '../../store/useGameStore'
+import { generateArchipelago } from '../terrain/IslandGenerator'
+import { getTerrainHeight } from '../terrain/terrainUtils'
 
 const riverVertexShader = `
   varying vec2 vUv;
@@ -43,34 +46,70 @@ const riverFragmentShader = `
 
 const Rivers = () => {
   const meshRef = useRef()
+  const seed = useGameStore((state) => state.seed)
+  const islands = useMemo(() => generateArchipelago(seed), [seed])
 
   const curves = useMemo(() => {
-    // River A: Mountain to SE split
-    const curveA = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 50, 0),
-      new THREE.Vector3(100, 30, 100),
-      new THREE.Vector3(200, 15, 300),
-      new THREE.Vector3(350, 0, 450)
-    ])
+    const generatePhysicPath = (startX, startZ) => {
+      const points = []
+      let currX = startX
+      let currZ = startZ
+      
+      // Finer steps for more accurate physics
+      const stepSize = 5.0
+      const maxSteps = 200
+      const eps = 1.0
 
-    // River B: Flow west
-    const curveB = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-50, 40, -50),
-      new THREE.Vector3(-150, 20, -100),
-      new THREE.Vector3(-300, 0, -200)
-    ])
+      for (let i = 0; i < maxSteps; i++) {
+        const h = getTerrainHeight(currX, currZ, 0, true, islands)
+        // Sit tighter on the terrain
+        points.push(new THREE.Vector3(currX, h + 0.15, currZ))
 
-    return [curveA, curveB]
-  }, [])
+        // Stop if we hit water (sea level is 0)
+        if (h < 0.2) break
+
+        // Gradient descent
+        const hL = getTerrainHeight(currX - eps, currZ, 0, true, islands)
+        const hR = getTerrainHeight(currX + eps, currZ, 0, true, islands)
+        const hD = getTerrainHeight(currX, currZ - eps, 0, true, islands)
+        const hU = getTerrainHeight(currX, currZ + eps, 0, true, islands)
+        
+        const gradX = (hR - hL) / (2.0 * eps)
+        const gradZ = (hU - hD) / (2.0 * eps)
+        
+        const len = Math.sqrt(gradX * gradX + gradZ * gradZ)
+        if (len < 0.0001) break
+
+        currX -= (gradX / len) * stepSize
+        currZ -= (gradZ / len) * stepSize
+      }
+
+      if (points.length < 3) return null
+      return new THREE.CatmullRomCurve3(points)
+    }
+
+    // Diverse starting points to simulate natural watershed
+    const paths = [
+      generatePhysicPath(80, 80),   
+      generatePhysicPath(-100, 40), 
+      generatePhysicPath(40, -120), 
+      generatePhysicPath(-20, 150)  
+    ].filter(p => p !== null)
+
+    return paths
+  }, [islands])
 
   const geometries = useMemo(() => {
-    return curves.map(curve => new THREE.TubeGeometry(curve, 120, 1.5, 8, false))
+    // Thicker, more detailed tubes
+    return curves.map(curve => new THREE.TubeGeometry(curve, 240, 2.5, 12, false))
   }, [curves])
 
   useFrame((state) => {
     if (meshRef.current) {
       meshRef.current.children.forEach(child => {
-        child.material.uniforms.uTime.value = state.clock.getElapsedTime()
+        if (child.material && child.material.uniforms) {
+          child.material.uniforms.uTime.value = state.clock.getElapsedTime()
+        }
       })
     }
   })
@@ -84,6 +123,9 @@ const Rivers = () => {
             uniforms={{ uTime: { value: 0 } }}
             vertexShader={riverVertexShader}
             fragmentShader={riverFragmentShader}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
           />
         </mesh>
       ))}

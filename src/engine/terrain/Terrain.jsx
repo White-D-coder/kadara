@@ -86,6 +86,9 @@ const Terrain = () => {
         uniforms={uniforms}
         side={THREE.FrontSide}
         wireframe={false}
+        polygonOffset
+        polygonOffsetFactor={1}
+        polygonOffsetUnits={1}
       />
     </instancedMesh>
   )

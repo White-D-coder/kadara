@@ -1,96 +1,194 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, PointerLockControls } from '@react-three/drei'
 import * as THREE from 'three'
 import useGameStore, { CAMERA_MODES } from '../../store/useGameStore'
+import { generateArchipelago } from '../terrain/IslandGenerator'
+import { getTerrainHeight } from '../terrain/terrainUtils'
+
+const MOVE_SPEED  = 25   // m/s comfortable walking / running speed
+const SPRINT_MULT = 3.0  // hold Shift to sprint
+const EYE_HEIGHT  = 1.75 // metres above ground
+const GRAVITY     = 18   // m/s²
+const DAMP        = 12   // horizontal friction
 
 const CameraSystem = () => {
-  const mode = useGameStore((state) => state.cameraMode)
-  const { camera, scene } = useThree()
-  const [velocity] = useState(() => new THREE.Vector3())
-  const [direction] = useState(() => new THREE.Vector3())
-  
-  const moveState = useRef({
-    forward: false,
-    backward: false,
-    left: false,
-    right: false,
-    jump: false
+  const mode    = useGameStore((state) => state.cameraMode)
+  const seed    = useGameStore((state) => state.seed)
+  const cityBuildings = useGameStore((state) => state.cityBuildings)
+  const { camera, gl } = useThree()
+  const plcRef  = useRef()          // PointerLockControls ref
+
+  // compute islands once from seed for terrain height sampling
+  const islands = React.useMemo(() => generateArchipelago(seed), [seed])
+
+  // FPV state
+  const vel       = useRef(new THREE.Vector3())
+  const yVel      = useRef(0)
+  const grounded  = useRef(false)
+  const spawned   = useRef(false)
+
+  // Key map
+  const keys = useRef({
+    w: false, a: false, s: false, d: false,
+    shift: false, space: false
   })
 
-  // Controls mapping
+  // ── Extend far plane ─────────────────────────────────────────────────────
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      switch (e.code) {
-        case 'KeyW': moveState.current.forward = true; break;
-        case 'KeyA': moveState.current.left = true; break;
-        case 'KeyS': moveState.current.backward = true; break;
-        case 'KeyD': moveState.current.right = true; break;
-        case 'Space': moveState.current.jump = true; break;
-      }
+    camera.far = 20000
+    camera.updateProjectionMatrix()
+  }, [camera])
+
+  // ── Keyboard listeners ───────────────────────────────────────────────────
+  useEffect(() => {
+    const down = (e) => {
+      if (e.code === 'KeyW')     keys.current.w     = true
+      if (e.code === 'KeyA')     keys.current.a     = true
+      if (e.code === 'KeyS')     keys.current.s     = true
+      if (e.code === 'KeyD')     keys.current.d     = true
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.current.shift = true
+      if (e.code === 'Space')    keys.current.space = true
     }
-    const handleKeyUp = (e) => {
-      switch (e.code) {
-        case 'KeyW': moveState.current.forward = false; break;
-        case 'KeyA': moveState.current.left = false; break;
-        case 'KeyS': moveState.current.backward = false; break;
-        case 'KeyD': moveState.current.right = false; break;
-        case 'Space': moveState.current.jump = false; break;
-      }
+    const up = (e) => {
+      if (e.code === 'KeyW')     keys.current.w     = false
+      if (e.code === 'KeyA')     keys.current.a     = false
+      if (e.code === 'KeyS')     keys.current.s     = false
+      if (e.code === 'KeyD')     keys.current.d     = false
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.current.shift = false
+      if (e.code === 'Space')    keys.current.space = false
     }
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup',   up)
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup',   up)
     }
   }, [])
 
-  useFrame((state, delta) => {
-    if (mode === CAMERA_MODES.FPV) {
-      // 1. Calculate movement direction
-      direction.z = Number(moveState.current.forward) - Number(moveState.current.backward)
-      direction.x = Number(moveState.current.right) - Number(moveState.current.left)
-      direction.normalize()
+  // ── One-time spawn at start position ─────────────────────────────────────
+  const startPosition = useGameStore((state) => state.startPosition)
+  useEffect(() => {
+    if (mode === CAMERA_MODES.FPV && startPosition && !spawned.current) {
+      camera.position.set(...startPosition)
+      spawned.current = true
+    }
+  }, [mode, startPosition, camera])
 
-      // 2. Apply movement velocity
-      if (moveState.current.forward || moveState.current.backward) velocity.z -= direction.z * 400.0 * delta
-      if (moveState.current.left || moveState.current.right) velocity.x -= direction.x * 400.0 * delta
+  // ── Raycaster for gravity (kept for building collision only) ─────────────
+  const downRay = useRef(new THREE.Raycaster())
 
-      // 3. Simple damping
-      velocity.z -= velocity.z * 10.0 * delta
-      velocity.x -= velocity.x * 10.0 * delta
+  // ── Per-frame FPV logic ───────────────────────────────────────────────────
+  useFrame((_, delta) => {
+    if (mode !== CAMERA_MODES.FPV) return
 
-      // 4. Apply to camera (using PointerLockControls logic)
-      // This is simplified; normally we'd move a ref object and have the camera follow
-      camera.translateX(-velocity.x * delta)
-      camera.translateZ(-velocity.z * delta)
+    const dt     = Math.min(delta, 0.05)
+    const locked = plcRef.current?.isLocked
 
-      // 5. Gravity Raycasting
-      const raycaster = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0))
-      const intersects = raycaster.intersectObjects(scene.children, true)
-      
-      const terrainIntersect = intersects.find(i => i.object.type === 'Mesh' || i.object.type === 'InstancedMesh')
-      
-      if (terrainIntersect) {
-        const targetY = terrainIntersect.point.y + 1.7 // Eye height
-        if (targetY < -0.3) {
-           // Prevent walking on water (simple check)
-           camera.position.y = Math.max(camera.position.y, 1.7)
-        } else {
-           camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetY, 0.1)
+    // ── Horizontal movement ───────────────────────────────────────────────
+    if (locked) {
+      const speed = MOVE_SPEED * (keys.current.shift ? SPRINT_MULT : 1.0)
+      const forward = new THREE.Vector3()
+      camera.getWorldDirection(forward)
+      forward.y = 0
+      forward.normalize()
+      const right = new THREE.Vector3()
+      right.crossVectors(forward, camera.up).normalize()
+
+      const move = new THREE.Vector3()
+      if (keys.current.w) move.addScaledVector(forward,  1)
+      if (keys.current.s) move.addScaledVector(forward, -1)
+      if (keys.current.d) move.addScaledVector(right,    1)
+      if (keys.current.a) move.addScaledVector(right,   -1)
+      if (move.lengthSq() > 0) move.normalize()
+
+      vel.current.addScaledVector(move, speed * dt * 8)
+      vel.current.x -= vel.current.x * DAMP * dt
+      vel.current.z -= vel.current.z * DAMP * dt
+
+      const checkCollision = (px, pz) => {
+        if (!cityBuildings || cityBuildings.length === 0) return false;
+        for (let i = 0; i < cityBuildings.length; i++) {
+          const b = cityBuildings[i];
+          const margin = 1.0; // wall spacing margin
+          const bBase = b.by !== undefined ? b.by : 18.0;
+          const heightLimit = bBase + (b.h || 1000); // 1000 for mansion if h missing
+          
+          if (Math.abs(px - b.bx) < (b.w / 2 + margin) && 
+              Math.abs(pz - b.bz) < (b.d / 2 + margin)) {
+            // Check if camera is below the roof
+            if (camera.position.y - 1.5 < heightLimit) {
+              return true;
+            }
+          }
         }
-      } else {
-        // Fall to "sea level" height
-        camera.position.y = Math.max(camera.position.y - 9.8 * delta, 1.7)
+        return false;
+      };
+
+      const tryMove = (dx, dz) => {
+        if (dx === 0 && dz === 0) return;
+        
+        const nextX = camera.position.x + dx;
+        const nextZ = camera.position.z + dz;
+        
+        const currentlyStuck = checkCollision(camera.position.x, camera.position.z);
+        const willCollide = checkCollision(nextX, nextZ);
+        
+        if (!willCollide || currentlyStuck) {
+          camera.position.x = nextX;
+          camera.position.z = nextZ;
+        } else {
+          // Cancel velocity on this axis if collided
+          if (dx !== 0) vel.current.x = 0;
+          if (dz !== 0) vel.current.z = 0;
+        }
       }
+
+      // Move X and Z independently to allow sliding along walls
+      tryMove(vel.current.x * dt, 0)
+      tryMove(0, vel.current.z * dt)
+    }
+
+    // ── Gravity using CPU terrain height (accurate, no raycasting) ────────
+    const terrainY   = getTerrainHeight(camera.position.x, camera.position.z, 0, true, islands)
+    const targetEyeY = terrainY + EYE_HEIGHT
+
+    if (camera.position.y > targetEyeY + 0.3) {
+      // Airborne — apply gravity
+      yVel.current -= GRAVITY * dt
+      camera.position.y += yVel.current * dt
+      grounded.current = false
+    } else {
+      // On ground — snap smoothly
+      camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetEyeY, 0.3)
+      yVel.current = 0
+      grounded.current = true
+    }
+
+    // ── Jump ─────────────────────────────────────────────────────────────
+    if (keys.current.space && grounded.current) {
+      yVel.current = 8
+      grounded.current = false
     }
   })
+
+  // ── Click to lock (FPV mode) ──────────────────────────────────────────────
+  const handleCanvasClick = useCallback(() => {
+    if (mode === CAMERA_MODES.FPV && plcRef.current && !plcRef.current.isLocked) {
+      plcRef.current.lock()
+    }
+  }, [mode])
+
+  useEffect(() => {
+    const canvas = gl.domElement
+    canvas.addEventListener('click', handleCanvasClick)
+    return () => canvas.removeEventListener('click', handleCanvasClick)
+  }, [gl, handleCanvasClick])
 
   return (
     <>
       {mode === CAMERA_MODES.FPV ? (
-        <PointerLockControls />
+        <PointerLockControls ref={plcRef} />
       ) : (
         <OrbitControls makeDefault enableDamping dampingFactor={0.05} />
       )}

@@ -119,34 +119,63 @@ export const terrainVertexShader = `
     }
   }
 
+  // ── City Plateau Blending ──────────────────────────────────────────────────
+  float applyCityPlateau(float wx, float wz, float originalH) {
+    float cityX = 30.0;
+    float cityZ = -150.0;
+    float cityRadius = 135.0;
+    float cityGround = 18.0;
+
+    float dx = wx - cityX;
+    float dz = wz - cityZ;
+    float dist = sqrt(dx * dx + dz * dz);
+
+    if (dist < cityRadius + 45.0) {
+      float t = clamp((dist - cityRadius) / 45.0, 0.0, 1.0);
+      float blend = t * t * (3.0 - 2.0 * t);
+      return mix(cityGround, originalH, blend);
+    }
+    return originalH;
+  }
+
   void main() {
     vUv = uv;
 
     // Instance matrix transforms the unit plane to world position+scale
     vec4 worldPosBase = instanceMatrix * vec4(position, 1.0);
+    float wx = worldPosBase.x;
+    float wz = worldPosBase.z;
 
     // Convert world pos to island-local normalised coords (radius = 1)
-    // The instanceMatrix scales by diameter, so local = (worldPos - center) / radius
-    // But since the plane is already unit and instanceMatrix handles positioning,
-    // we can use the position attribute directly (it's in [-0.5, 0.5] range)
-    float lx = position.x;   // already in normalised island space
-    float lz = position.z;
+    // Map position.x [-0.5, 0.5] -> lx [-1, 1] to cover the full island logic
+    float lx = position.x * 2.0;
+    float lz = position.z * 2.0;
 
     float h = getElevation(vec3(lx, 0.0, lz), aIslandSeed, aIslandType);
+    h = applyCityPlateau(wx, wz, h);
 
     // Compute normal via central differences in local space
-    float eps = 1.0 / 384.0;  // matches subdivision
-    float hL = getElevation(vec3(lx - eps, 0.0, lz), aIslandSeed, aIslandType);
-    float hR = getElevation(vec3(lx + eps, 0.0, lz), aIslandSeed, aIslandType);
-    float hD = getElevation(vec3(lx, 0.0, lz - eps), aIslandSeed, aIslandType);
-    float hU = getElevation(vec3(lx, 0.0, lz + eps), aIslandSeed, aIslandType);
+    float eps = 1.0 / 256.0; // Slightly larger epsilon for more stable normals
+    float worldDelta = eps * 2.0 * aIslandRadius;
+
+    float hL = getElevation(vec3(lx - eps * 2.0, 0.0, lz), aIslandSeed, aIslandType);
+    hL = applyCityPlateau(wx - worldDelta, wz, hL);
+
+    float hR = getElevation(vec3(lx + eps * 2.0, 0.0, lz), aIslandSeed, aIslandType);
+    hR = applyCityPlateau(wx + worldDelta, wz, hR);
+
+    float hD = getElevation(vec3(lx, 0.0, lz - eps * 2.0), aIslandSeed, aIslandType);
+    hD = applyCityPlateau(wx, wz - worldDelta, hD);
+
+    float hU = getElevation(vec3(lx, 0.0, lz + eps * 2.0), aIslandSeed, aIslandType);
+    hU = applyCityPlateau(wx, wz + worldDelta, hU);
 
     vElevation = h;
     vDist = sqrt(lx * lx + lz * lz);
     vWorldPosition = worldPosBase.xyz + vec3(0.0, h, 0.0);
 
-    // Normal in world space
-    vNormal = normalize(vec3(hL - hR, 2.0 * eps * aIslandRadius, hD - hU));
+    // Normal in world space.
+    vNormal = normalize(vec3(hL - hR, 16.0 * eps * aIslandRadius, hD - hU));
 
     gl_Position = projectionMatrix * viewMatrix * vec4(vWorldPosition, 1.0);
   }
@@ -174,14 +203,15 @@ export const terrainFragmentShader = `
     vec3 colSnow   = vec3(0.94, 0.96, 0.98);  // snow/ice
 
     // ── Height-based blending ────────────────────────────────────────────────
-    float beachBlend  = smoothstep(2.0, 6.0, h);
-    float grassBlend  = smoothstep(5.0, 12.0, h);
+    // Adjusted to start below water level for a smoother transition underwater
+    float beachBlend  = smoothstep(-1.0, 2.0, h);
+    float grassBlend  = smoothstep(1.5, 8.0, h);
     float forestBlend = smoothstep(18.0, 30.0, h);
     float rockBlend   = smoothstep(55.0, 70.0, h);
     float snowBlend   = smoothstep(110.0, 130.0, h);
 
     vec3 baseColor = colBeach;
-    baseColor = mix(baseColor, colGrass,  beachBlend);
+    baseColor = mix(baseColor, colGrass,  grassBlend);
     baseColor = mix(baseColor, colForest, forestBlend);
     baseColor = mix(baseColor, colRock,   rockBlend);
     baseColor = mix(baseColor, colSnow,   snowBlend);

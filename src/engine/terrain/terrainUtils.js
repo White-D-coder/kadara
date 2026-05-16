@@ -139,6 +139,11 @@ function rockyHeight(lx, lz, s) {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+export const CITY_X = 30.0;
+export const CITY_Z = -150.0;
+export const CITY_RADIUS = 135.0;
+export const CITY_GROUND_LEVEL = 18.0;
+
 /**
  * Returns world-space terrain height at (x, z).
  *
@@ -168,7 +173,7 @@ export function getTerrainHeight(x, z, seed = 0, isMain = true, islands = null) 
     const lz = z / radius
     if (lx * lx + lz * lz > 1.6 * 1.6) return 0
     const s = (seed || 0) * 13.7
-    return Math.max(0, mainHeight(lx, lz, s))
+    return applyCityPlateau(x, z, Math.max(0, mainHeight(lx, lz, s)))
   }
 
   // ── B: Multi-instance mode ─────────────────────────────────────────────
@@ -196,7 +201,21 @@ export function getTerrainHeight(x, z, seed = 0, isMain = true, islands = null) 
     totalHeight += Math.max(0, h)
   }
 
-  return totalHeight
+  return applyCityPlateau(x, z, totalHeight)
+}
+
+function applyCityPlateau(x, z, originalHeight) {
+  const dx = x - CITY_X;
+  const dz = z - CITY_Z;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  
+  // Blend from city ground level out to natural terrain over 45 meters
+  if (dist < CITY_RADIUS + 45.0) {
+    const t = Math.max(0.0, Math.min(1.0, (dist - CITY_RADIUS) / 45.0));
+    const blend = t * t * (3.0 - 2.0 * t); // smoothstep
+    return CITY_GROUND_LEVEL * (1.0 - blend) + originalHeight * blend;
+  }
+  return originalHeight;
 }
 
 /**
@@ -233,4 +252,24 @@ export function getTerrainBiome(x, z, seed = 0, isMain = true, islands = null) {
   if (h >= 55.0)        return 'rock'
   if (h >= 18.0)        return 'forest'
   return 'grass'
+}
+
+/**
+ * Check if a specific world position is suitable for building.
+ * Logic synchronized with grid.js shader.
+ */
+export const isPlotBuildable = (x, z, seed = 0) => {
+  const h = getTerrainHeight(x, z, seed)
+  
+  // Basic Slope Estimation (central difference)
+  const delta = 0.5
+  const hx = getTerrainHeight(x + delta, z, seed)
+  const hz = getTerrainHeight(x, z + delta, seed)
+  const dx = (hx - h) / delta
+  const dz = (hz - h) / delta
+  const slope = Math.sqrt(dx * dx + dz * dz)
+
+  // 5.0 - 18.0 is the Grass biome
+  // slope < 0.15 is considered flat enough for construction
+  return h > 5.0 && h < 18.0 && slope < 0.15
 }

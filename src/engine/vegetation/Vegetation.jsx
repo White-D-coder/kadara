@@ -1,136 +1,154 @@
+/**
+ * Vegetation.jsx — Fully custom procedural tree system.
+ * No GLB / external assets — everything built from Three.js primitives.
+ * Three species:  Oak (round crown), Pine (cone), Cherry (pink sphere).
+ * Uses instanced meshes for trunk + crown separately for performance.
+ */
 import React, { useMemo } from 'react'
-import { useGLTF, Instances, Instance } from '@react-three/drei'
 import * as THREE from 'three'
+import useGameStore from '../../store/useGameStore'
 import { generateArchipelago } from '../terrain/IslandGenerator'
 import { getTerrainHeight, getTerrainNormal } from '../terrain/terrainUtils'
-import useGameStore from '../../store/useGameStore'
 
-// Simple deterministic noise for JS placement
-const pseudoNoise = (x, z) => {
-  const n = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453123
+// ─── Seeded noise helpers ─────────────────────────────────────────────────────
+const srand = (s) => {
+  const n = Math.sin(s * 9301.0 + 49297.0) * 233280.0
   return n - Math.floor(n)
 }
 
-const Vegetation = () => {
-  const seed = useGameStore((state) => state.seed)
-  const islands = useMemo(() => generateArchipelago(seed), [seed])
+const pseudoCluster = (x, z) => {
+  const n = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453
+  return n - Math.floor(n)
+}
 
-  // Load Tree Assets
-  const birchGLTF = useGLTF('/static/birchTrees/birchTreesVisual.glb')
-  const oakGLTF = useGLTF('/static/oakTrees/oakTreesVisual.glb')
-  const cherryGLTF = useGLTF('/static/cherryTrees/cherryTreesVisual.glb')
-  const sceneryGLTF = useGLTF('/static/scenery/scenery.glb')
+// ─── Materials (defined once) ─────────────────────────────────────────────────
+const TRUNK_MAT   = new THREE.MeshStandardMaterial({ color: '#5c3d1e', roughness: 0.9 })
+const OAK_MAT     = new THREE.MeshStandardMaterial({ color: '#2d6a2d', roughness: 0.85 })
+const PINE_MAT    = new THREE.MeshStandardMaterial({ color: '#1a4a1a', roughness: 0.85 })
+const CHERRY_MAT  = new THREE.MeshStandardMaterial({ color: '#e8a0c0', roughness: 0.8 })
 
-  const instanceData = useMemo(() => {
-    const birch = []
-    const oak = []
-    const cherry = []
-    const props = []
+// ─── Geometries (defined once) ────────────────────────────────────────────────
+const TRUNK_GEO   = new THREE.CylinderGeometry(0.18, 0.28, 1.6, 7)
+const OAK_GEO     = new THREE.SphereGeometry(1.6, 8, 6)
+const PINE_GEO    = new THREE.ConeGeometry(1.4, 3.5, 7)
+const CHERRY_GEO  = new THREE.SphereGeometry(1.3, 8, 6)
 
-    islands.forEach((island) => {
-      const isMain = island.type === 'main'
-      // Much more trees on the single large main island
-      const count = isMain ? 3500 : 40
+// ─── Tree placement data builder ─────────────────────────────────────────────
+function buildTreeData(islands) {
+  const oaks    = []
+  const pines   = []
+  const cherries = []
 
-      for (let i = 0; i < count; i++) {
-        const angle = pseudoNoise(island.seed, i) * Math.PI * 2
-        const distRatio = Math.sqrt(pseudoNoise(i, island.seed))
-        const dist = distRatio * (island.radius - 15)
+  for (const island of islands) {
+    const isMain = island.type === 'main'
+    const count  = isMain ? 4000 : 60
 
-        const x = island.position.x + Math.cos(angle) * dist
-        const z = island.position.z + Math.sin(angle) * dist
+    for (let i = 0; i < count; i++) {
+      const angle     = srand(island.seed + i * 0.371) * Math.PI * 2
+      const distRatio = Math.sqrt(srand(i * 0.613 + island.seed * 3.7))
+      const dist      = distRatio * (island.radius - 12)
+      const wx        = island.position.x + Math.cos(angle) * dist
+      const wz        = island.position.z + Math.sin(angle) * dist
 
-        // Height sampling
-        const groundHeight = getTerrainHeight(x, z, 0, isMain)
+      const h = getTerrainHeight(wx, wz, 0, isMain)
+      if (h < 5.5 || h > 56.0) continue
 
-        // Clustering — denser in forest band
-        const cluster = pseudoNoise(x * 0.08, z * 0.08)
-        if (cluster < 0.25) continue
+      const normal = getTerrainNormal(wx, wz, 0, isMain)
+      if (1.0 - normal.y > 0.42) continue
 
-        // Valid planting zone: above beach (5), below rock line (55)
-        if (groundHeight < 5.0 || groundHeight > 58.0) continue
+      const cluster = pseudoCluster(wx * 0.07, wz * 0.07)
+      if (cluster < 0.22) continue
 
-        // Slope check — no trees on steep cliffs
-        const normal = getTerrainNormal(x, z, 0, isMain)
-        const slope = 1.0 - normal.y
-        if (slope > 0.40) continue
+      const elevFactor = 1.0 - Math.min(h / 58.0, 0.45)
+      const scale      = (0.6 + srand(wx + wz) * 0.9) * elevFactor
+      const rotY       = srand(i + wx) * Math.PI * 2
 
-        const treeType = pseudoNoise(x, z)
-        // Scale varies by elevation — smaller near treeline
-        const elevFactor = 1.0 - Math.min(groundHeight / 60.0, 0.5)
-        const scale = (0.7 + pseudoNoise(z, x) * 0.6) * elevFactor
-        const rotation = [0, pseudoNoise(x + z, i) * Math.PI * 2, 0]
+      const entry = { wx, wy: h, wz, scale, rotY }
+      const species = srand(i * 1.37 + island.seed)
 
-        const treeData = {
-          position: [x, groundHeight, z],
-          scale: [scale, scale, scale],
-          rotation: rotation
-        }
-
-        // Distribute by biome band
-        if (groundHeight < 18.0) {
-          // Lower elevation — more cherry and birch
-          if (treeType < 0.45) cherry.push(treeData)
-          else if (treeType < 0.75) birch.push(treeData)
-          else oak.push(treeData)
-        } else {
-          // Higher elevation forest — mostly oak and birch
-          if (treeType < 0.5) oak.push(treeData)
-          else if (treeType < 0.8) birch.push(treeData)
-          else cherry.push(treeData)
-        }
-
-        // Prop scattering at beach/rock transitions
-        if ((groundHeight < 7.0 || groundHeight > 50.0) && pseudoNoise(i, x) > 0.90) {
-          props.push({
-            ...treeData,
-            position: [x, groundHeight - 0.2, z],
-            type: Math.floor(pseudoNoise(x, i) * 3)
-          })
-        }
+      if (h < 20.0) {
+        cherries.push(entry)
+      } else if (species < 0.55) {
+        oaks.push(entry)
+      } else {
+        pines.push(entry)
       }
-    })
+    }
+  }
+  return { oaks, pines, cherries }
+}
 
-    return { birch, oak, cherry, props }
-  }, [islands])
+// ─── Single-species instanced renderer ───────────────────────────────────────
+const TreeInstances = ({ entries, trunkGeo, crownGeo, crownMat, crownOffsetY }) => {
+  const count = Math.min(entries.length, 2000)
 
-  // Extract geometries and materials
-  const birchMesh = birchGLTF.nodes.tree_birch || Object.values(birchGLTF.nodes).find(n => n.isMesh)
-  const oakMesh = oakGLTF.nodes.tree_oak || Object.values(oakGLTF.nodes).find(n => n.isMesh)
-  const cherryMesh = cherryGLTF.nodes.tree_cherry || Object.values(cherryGLTF.nodes).find(n => n.isMesh)
-  const sceneryMeshes = Object.values(sceneryGLTF.nodes).filter(n => n.isMesh)
+  const { trunkMatrices, crownMatrices } = useMemo(() => {
+    const tm = [], cm = []
+    const mat = new THREE.Matrix4()
+    const pos = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
+    const scl  = new THREE.Vector3()
+
+    for (let i = 0; i < count; i++) {
+      const { wx, wy, wz, scale, rotY } = entries[i]
+      quat.setFromEuler(new THREE.Euler(0, rotY, 0))
+
+      // Trunk
+      pos.set(wx, wy + 0.8 * scale, wz)
+      scl.set(scale, scale * 1.2, scale)
+      mat.compose(pos, quat, scl)
+      tm.push(mat.clone())
+
+      // Crown
+      pos.set(wx, wy + (1.6 + crownOffsetY) * scale, wz)
+      scl.set(scale, scale, scale)
+      mat.compose(pos, quat, scl)
+      cm.push(mat.clone())
+    }
+    return { trunkMatrices: tm, crownMatrices: cm }
+  }, [entries, count, crownOffsetY])
+
+  return (
+    <>
+      <instancedMesh args={[trunkGeo, TRUNK_MAT, count]} castShadow receiveShadow
+        ref={(ref) => { if (ref) trunkMatrices.forEach((m, i) => ref.setMatrixAt(i, m)) && (ref.instanceMatrix.needsUpdate = true) }}
+      />
+      <instancedMesh args={[crownGeo, crownMat, count]} castShadow receiveShadow
+        ref={(ref) => { if (ref) crownMatrices.forEach((m, i) => ref.setMatrixAt(i, m)) && (ref.instanceMatrix.needsUpdate = true) }}
+      />
+    </>
+  )
+}
+
+// ─── Main exported component ──────────────────────────────────────────────────
+const Vegetation = () => {
+  const seed    = useGameStore((state) => state.seed)
+  const islands = useMemo(() => generateArchipelago(seed), [seed])
+  const { oaks, pines, cherries } = useMemo(() => buildTreeData(islands), [islands])
 
   return (
     <group>
-      {/* Oak Instances */}
-      <Instances range={instanceData.oak.length} geometry={oakMesh.geometry} material={oakMesh.material}>
-        {instanceData.oak.slice(0, 1500).map((tree, i) => (
-          <Instance key={i} position={tree.position} scale={tree.scale} rotation={tree.rotation} />
-        ))}
-      </Instances>
-
-      {/* Birch Instances */}
-      <Instances range={instanceData.birch.length} geometry={birchMesh.geometry} material={birchMesh.material}>
-        {instanceData.birch.slice(0, 1000).map((tree, i) => (
-          <Instance key={i} position={tree.position} scale={tree.scale} rotation={tree.rotation} />
-        ))}
-      </Instances>
-
-      {/* Cherry Instances */}
-      <Instances range={instanceData.cherry.length} geometry={cherryMesh.geometry} material={cherryMesh.material}>
-        {instanceData.cherry.slice(0, 600).map((tree, i) => (
-          <Instance key={i} position={tree.position} scale={tree.scale} rotation={tree.rotation} />
-        ))}
-      </Instances>
-
-      {/* Scenery Props (Rocks, Logs) */}
-      {sceneryMeshes.slice(0, 3).map((mesh, idx) => (
-        <Instances key={idx} range={instanceData.props.length} geometry={mesh.geometry} material={mesh.material}>
-          {instanceData.props.filter(p => p.type === idx).map((prop, i) => (
-            <Instance key={i} position={prop.position} scale={prop.scale} rotation={prop.rotation} />
-          ))}
-        </Instances>
-      ))}
+      <TreeInstances
+        entries={oaks}
+        trunkGeo={TRUNK_GEO}
+        crownGeo={OAK_GEO}
+        crownMat={OAK_MAT}
+        crownOffsetY={1.0}
+      />
+      <TreeInstances
+        entries={pines}
+        trunkGeo={TRUNK_GEO}
+        crownGeo={PINE_GEO}
+        crownMat={PINE_MAT}
+        crownOffsetY={1.6}
+      />
+      <TreeInstances
+        entries={cherries}
+        trunkGeo={TRUNK_GEO}
+        crownGeo={CHERRY_GEO}
+        crownMat={CHERRY_MAT}
+        crownOffsetY={0.9}
+      />
     </group>
   )
 }

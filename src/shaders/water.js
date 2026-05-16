@@ -49,13 +49,13 @@ export const waterFragmentShader = `
     float foamMask = step(0.28, waveY) * noise(vUv * 12.0 + uTime * 0.5);
     vec3 foamColor = vec3(1.0, 1.0, 1.0);
 
-    // Distance-based shore blend (matches island radius 400)
+    // Distance-based shore blend (matches island cluster radius)
     float distFromIsland = length(vWorldPosition.xz);
-    float shoreBlend = 1.0 - smoothstep(50.0, 600.0, distFromIsland);
+    float shoreBlend = 1.0 - smoothstep(50.0, 550.0, distFromIsland);
 
-    // Shoreline foam ring at island edge
-    float shoreFoam = smoothstep(320.0, 400.0, distFromIsland) * (1.0 - smoothstep(400.0, 450.0, distFromIsland));
-    shoreFoam *= noise(vWorldPosition.xz * 0.15 + uTime * 0.3) * 0.8;
+    // Shoreline foam ring at island edges (radius ~400)
+    float shoreFoam = smoothstep(300.0, 410.0, distFromIsland) * (1.0 - smoothstep(410.0, 480.0, distFromIsland));
+    shoreFoam *= noise(vWorldPosition.xz * 0.12 + uTime * 0.25) * 0.6;
 
     // Color palette matching ref images
     vec3 deepColor    = vec3(0.04, 0.24, 0.37);   // deep navy  #0a3d5f

@@ -13,7 +13,7 @@ const PlotGrid = () => {
   const { raycaster, mouse, camera } = useThree()
   
   const size = 2000
-  const divisions = 50 // Plot resolution (50x50 plots over 2000m)
+  const divisions = 100 // Plot resolution (100x100 plots over 2000m)
   
   // High subdivision geometry to follow terrain topography in the shader
   const geometry = useMemo(() => new THREE.PlaneGeometry(size, size, 128, 128).rotateX(-Math.PI / 2), [])

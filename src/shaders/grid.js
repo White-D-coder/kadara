@@ -2,6 +2,7 @@ export const gridVertexShader = `
   varying vec2 vUv;
   varying vec3 vWorldPosition;
   varying float vElevation;
+  varying vec3 vNormal;
 
   float getElevation(vec3 worldPos) {
     float px = worldPos.x;
@@ -24,9 +25,16 @@ export const gridVertexShader = `
   void main() {
     vUv = uv;
     vec4 worldPosBase = modelMatrix * vec4(position, 1.0);
+    
+    // Simple normal estimation
+    float delta = 0.1;
     float h = getElevation(worldPosBase.xyz);
+    float hx = getElevation(worldPosBase.xyz + vec3(delta, 0.0, 0.0));
+    float hz = getElevation(worldPosBase.xyz + vec3(0.0, 0.0, delta));
+    vNormal = normalize(vec3(h - hx, delta, h - hz));
+    
     vElevation = h;
-    vWorldPosition = worldPosBase.xyz + vec3(0.0, h + 0.1, 0.0);
+    vWorldPosition = worldPosBase.xyz + vec3(0.0, h + 0.5, 0.0);
     
     gl_Position = projectionMatrix * viewMatrix * vec4(vWorldPosition, 1.0);
   }
@@ -36,21 +44,23 @@ export const gridFragmentShader = `
   varying vec2 vUv;
   varying vec3 vWorldPosition;
   varying float vElevation;
+  varying vec3 vNormal;
   
   uniform vec2 uHoveredPlot;
   uniform float uTime;
   uniform float uOpacity;
 
   void main() {
-    vec2 gridPos = vUv * 50.0; // Coarser grid for plots (50x50)
+    vec2 gridPos = vUv * 100.0;
     vec2 localUv = fract(gridPos);
     
     float lineThickness = 0.05;
     float gridLine = step(1.0 - lineThickness, localUv.x) + step(1.0 - lineThickness, localUv.y);
     gridLine = clamp(gridLine, 0.0, 1.0);
     
-    // Buildable Check: Flat-ish areas above sea level and below high peaks
-    bool buildable = vElevation > 1.0 && vElevation < 35.0;
+    // Buildable Check: Restricted to Grass Biome (5.0-18.0) and Flat Areas (Slope < 0.15)
+    float slope = 1.0 - vNormal.y;
+    bool buildable = vElevation > 5.0 && vElevation < 18.0 && slope < 0.15;
     
     vec3 gridBaseColor = buildable ? vec3(0.0, 0.8, 0.4) : vec3(0.8, 0.2, 0.1);
     
@@ -65,6 +75,9 @@ export const gridFragmentShader = `
     // Distance falloff
     float dist = length(vWorldPosition.xz);
     alpha *= smoothstep(600.0, 200.0, dist);
+    
+    // Mask out water areas
+    if (vElevation < 0.2) discard;
     
     if (alpha < 0.001) discard;
     

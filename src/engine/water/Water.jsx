@@ -7,7 +7,7 @@ const Water = () => {
   const meshRef = useRef()
   const { camera } = useThree()
   
-  const geometry = useMemo(() => new THREE.PlaneGeometry(2000, 2000, 1, 1).rotateX(-Math.PI / 2), [])
+  const geometry = useMemo(() => new THREE.PlaneGeometry(2000, 2000, 256, 256).rotateX(-Math.PI / 2), [])
   
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
@@ -22,12 +22,15 @@ const Water = () => {
   })
 
   return (
-    <mesh ref={meshRef} geometry={geometry} position={[0, -0.5, 0]}>
+    <mesh ref={meshRef} geometry={geometry} position={[0, 0, 0]}>
       <shaderMaterial
         vertexShader={waterVertexShader}
         fragmentShader={waterFragmentShader}
         uniforms={uniforms}
         transparent
+        polygonOffset
+        polygonOffsetFactor={-2}
+        polygonOffsetUnits={-2}
       />
     </mesh>
   )
